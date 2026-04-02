@@ -1,0 +1,7 @@
+{
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"/home/neubility-sim/isaac_ws/DEXTRAH/dextrah_lab/tasks/openarm/openarm_env.py\"}",
+  "error": "File content (22784 tokens) exceeds maximum allowed tokens (10000). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.",
+  "timestamp": "2026-03-24T06:21:03.748Z",
+  "retry_count": 1
+}

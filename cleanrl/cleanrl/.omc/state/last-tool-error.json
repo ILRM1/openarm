@@ -1,0 +1,7 @@
+{
+  "tool_name": "Read",
+  "tool_input_preview": "{\"file_path\":\"/home/neubility-sim/isaac_ws/DEXTRAH/dextrah_lab/tasks/openarm/agents\"}",
+  "error": "EISDIR: illegal operation on a directory, read '/home/neubility-sim/isaac_ws/DEXTRAH/dextrah_lab/tasks/openarm/agents'",
+  "timestamp": "2026-03-24T14:54:00.786Z",
+  "retry_count": 2
+}

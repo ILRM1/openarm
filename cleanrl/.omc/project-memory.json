@@ -1,0 +1,173 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1774418468997,
+  "projectRoot": "/home/neubility-sim/isaac_ws/cleanrl",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Python",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "pyproject.toml"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "pytest",
+        "version": null,
+        "category": "testing"
+      }
+    ],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": "pytest",
+    "lintCommand": "ruff check",
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "tests"
+    ],
+    "gitBranches": {
+      "defaultBranch": "master",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "${data}": {
+      "path": "${data}",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1774418468994,
+      "keyFiles": [
+        "NvStreamer-20260324-162559.etli",
+        "NvStreamer-20260325-133727.etli",
+        "NvStreamer-20260325-133746.etli",
+        "NvStreamer-20260325-135005.etli",
+        "NvStreamer-20260325-135013.etli"
+      ]
+    },
+    "benchmark": {
+      "path": "benchmark",
+      "purpose": null,
+      "fileCount": 21,
+      "lastAccessed": 1774418468995,
+      "keyFiles": [
+        "c51.sh",
+        "cleanrl_1gpu.slurm_template",
+        "ddpg.sh",
+        "ddpg_plot.sh",
+        "dqn.sh"
+      ]
+    },
+    "cleanrl": {
+      "path": "cleanrl",
+      "purpose": null,
+      "fileCount": 34,
+      "lastAccessed": 1774418468995,
+      "keyFiles": [
+        "c51.py",
+        "c51_atari.py",
+        "c51_atari_jax.py",
+        "c51_jax.py",
+        "ddpg_continuous_action.py"
+      ]
+    },
+    "cloud": {
+      "path": "cloud",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1774418468996,
+      "keyFiles": [
+        "main.tf"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 4,
+      "lastAccessed": 1774418468996,
+      "keyFiles": [
+        "CNAME",
+        "cleanrl-supported-papers-projects.md",
+        "contribution.md",
+        "index.md"
+      ]
+    },
+    "outputs": {
+      "path": "outputs",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1774418468996,
+      "keyFiles": []
+    },
+    "requirements": {
+      "path": "requirements",
+      "purpose": null,
+      "fileCount": 12,
+      "lastAccessed": 1774418468996,
+      "keyFiles": [
+        "requirements-atari.txt",
+        "requirements-cloud.txt",
+        "requirements-dm_control.txt",
+        "requirements-docs.txt",
+        "requirements-envpool.txt"
+      ]
+    },
+    "runs": {
+      "path": "runs",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1774418468996,
+      "keyFiles": []
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 15,
+      "lastAccessed": 1774418468996,
+      "keyFiles": [
+        "test_atari.py",
+        "test_atari_gymnasium.py",
+        "test_atari_jax_gymnasium.py",
+        "test_atari_multigpu.py",
+        "test_classic_control.py"
+      ]
+    },
+    "cloud/examples": {
+      "path": "cloud/examples",
+      "purpose": "Example code",
+      "fileCount": 2,
+      "lastAccessed": 1774418468996,
+      "keyFiles": [
+        "submit_exp.sh",
+        "terminate_all.sh"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "cleanrl/ppo_openarm_lstm.py",
+      "accessCount": 8,
+      "lastAccessed": 1774487617396,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
