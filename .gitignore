@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.so
+
+# 가상환경
+.venv/
+env/
+venv/
+
+# 학습 결과물
+**/runs/
+**/logs/
+**/outputs/
+wandb/
+*.pth
+*.pt
+*.ckpt
+
+# Isaac Sim / Omniverse 캐시
+_isaac_sim/
+omni.cache/
+*.usd.bak
+**/.asset_hash
+
+# 데이터
+*.hdf5
+*.h5
+*.npy
+*.npz
+
+# 설정/비밀
+.env
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 기타
+*.log
+*.tmp

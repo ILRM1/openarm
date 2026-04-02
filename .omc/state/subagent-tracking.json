@@ -1,0 +1,35 @@
+{
+  "agents": [
+    {
+      "agent_id": "a0943143c226ae300",
+      "agent_type": "Explore",
+      "started_at": "2026-03-20T05:06:17.125Z",
+      "parent_mode": "none",
+      "status": "completed",
+      "completed_at": "2026-03-20T05:08:07.766Z",
+      "duration_ms": 110641
+    },
+    {
+      "agent_id": "a214474e6af9be05b",
+      "agent_type": "oh-my-claudecode:planner",
+      "started_at": "2026-03-21T14:30:14.147Z",
+      "parent_mode": "none",
+      "status": "completed",
+      "completed_at": "2026-03-21T14:36:10.783Z",
+      "duration_ms": 356636
+    },
+    {
+      "agent_id": "a13eb7090753ad17b",
+      "agent_type": "coding-tutor",
+      "started_at": "2026-03-23T04:13:43.067Z",
+      "parent_mode": "none",
+      "status": "completed",
+      "completed_at": "2026-03-23T04:14:55.152Z",
+      "duration_ms": 72085
+    }
+  ],
+  "total_spawned": 3,
+  "total_completed": 3,
+  "total_failed": 0,
+  "last_updated": "2026-03-23T04:14:55.253Z"
+}
