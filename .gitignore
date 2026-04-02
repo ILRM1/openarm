@@ -26,6 +26,8 @@ _isaac_sim/
 omni.cache/
 *.usd.bak
 **/.asset_hash
+*.etli
+**/${data}/
 
 # 데이터
 *.hdf5
