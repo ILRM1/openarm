@@ -122,18 +122,17 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     use_cuda_graph = False
 
     # env
-    sim_dt = 1/60.
-    fabrics_dt = 1/60.
-    decimation = 1 # 60 Hz
+    sim_dt = 1/120.
+    decimation = 2 # 60 Hz
     episode_length_s = 15. #10.0
-    num_sim_steps_to_render=2 # renders every 4 sim steps, so 60 Hz
+    num_sim_steps_to_render=4 # renders every 4 sim steps, so 60 Hz
     num_actions = 7
     success_timeout = 2.
     distillation = False
     num_student_observations = 0
     num_teacher_observations = 0
-    num_observations = 37
-    num_states = 37
+    num_observations = 38
+    num_states = 38
 
     state_space = 0
     observation_space = 0
@@ -261,7 +260,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=(0.05 + 0.725 / 2,
                  0.668 - 1.16 / 2,
-                 0.25 - 0.03 / 2),
+                 0.20 - 0.03 / 2),
             rot=(1.0, 0.0, 0.0, 0.0)),
     )
     # distillation related parameters
@@ -412,20 +411,20 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     lift_sharpness = 8.5
 
     # Goal reaching parameters
-    object_goal_tol = 0.1 # m
+    object_goal_tol = 0.03 # m
     success_for_adr = 0.4
-    #min_steps_for_dr_change = 240 # number of steps
-    min_steps_for_dr_change = 5 * int(episode_length_s / (decimation * sim_dt))
+    min_steps_for_dr_change = 240 # number of steps
+    #min_steps_for_dr_change = 5 * int(episode_length_s / (decimation * sim_dt))
 
     # Lift criteria
     min_num_episode_steps = 60
     object_height_thresh = 0.15
 
     # Object spawning params
-    x_center = 0.3
-    x_width = 0.2
-    y_center = 0.1
-    y_width = 0.3 
+    x_center = 0.25
+    x_width = 0.15
+    y_center = 0.15
+    y_width = 0.25 
 
     # DR Controls
     enable_adr = True
@@ -513,7 +512,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         },
         "reward_weights": {
             "finger_curl_reg": (-0.01, -0.01),
-            "object_to_goal_sharpness": (-15., -20.),
+            "object_to_goal_sharpness": (-150., -155.),
             "lift_weight": (5., 0.)
         },
         "pd_targets": {
