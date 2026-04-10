@@ -411,7 +411,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     lift_sharpness = 8.5
 
     # Goal reaching parameters
-    object_goal_tol = 0.03 # m
+    object_goal_tol = 0.02 # m
     success_for_adr = 0.4
     min_steps_for_dr_change = 240 # number of steps
     #min_steps_for_dr_change = 5 * int(episode_length_s / (decimation * sim_dt))
@@ -501,8 +501,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             "object_rot_bias": (0.0, 0.08), # rad
         },
         "robot_spawn": {
-            "joint_pos_noise": (0., 0.35),
-            "joint_vel_noise": (0., 1.)
+            "joint_pos_noise": (0., 0.1),
+            "joint_vel_noise": (0., 0.)
         },
         "robot_state_noise": {
             "robot_joint_pos_noise": (0.0, 0.08), # rad

@@ -101,7 +101,7 @@ class OpenarmEnv(DirectRLEnv):
 
         # Setting the target position for the object
         # TODO: need to make these goals dynamic, sampled at the start of the rollout
-        self.object_goal = torch.tensor([0.25, 0.15, 0.33], device=self.device).repeat((self.num_envs, 1))
+        self.object_goal = torch.tensor([0.25, 0.15, 0.3], device=self.device).repeat((self.num_envs, 1))
        
         # Nominal reset states for the robot
         self.robot_start_joint_pos =torch.tensor([0.63, -0.35,  -0.24,  2.0, -0.54, 0.0, 1.1,
@@ -703,6 +703,15 @@ class OpenarmEnv(DirectRLEnv):
         object_outside_upper_y = self.object_pos[:,1] > (self.cfg.y_center + self.cfg.y_width / 2.)
         object_outside_lower_y = self.object_pos[:,1] < (self.cfg.y_center - self.cfg.y_width / 2.)
 
+        tip_outside_upper_x = self.left_tcp_pose[:,0] > (self.cfg.x_center + self.cfg.x_width / 2.) +0.1
+        tip_outside_lower_x = self.left_tcp_pose[:,0] < (self.cfg.x_center - self.cfg.x_width / 2.) -0.1
+
+        tip_outside_upper_y = self.left_tcp_pose[:,1] > (self.cfg.y_center + self.cfg.y_width / 2.)+0.1
+        tip_outside_lower_y = self.left_tcp_pose[:,1] < (self.cfg.y_center - self.cfg.y_width / 2.)-0.1
+
+        tip_outside_upper_z = self.left_tcp_pose[:,2] > 0.4
+        tip_outside_lower_z = self.left_tcp_pose[:,2] < 0.2
+
         z_height_cutoff = 0.15
         object_too_low = self.object_pos[:,2] < z_height_cutoff
 
@@ -710,7 +719,13 @@ class OpenarmEnv(DirectRLEnv):
                        object_outside_lower_x | \
                        object_outside_upper_y | \
                        object_outside_lower_y | \
-                       object_too_low
+                       object_too_low | \
+                       tip_outside_upper_x | \
+                       tip_outside_lower_x | \
+                       tip_outside_upper_y | \
+                       tip_outside_lower_y | \
+                       tip_outside_upper_z | \
+                       tip_outside_lower_z
     
         # self.out_of_joint_limit = torch.where((self.robot_dof_pos[:,3] >= self.robot_dof_upper_limits[0, 3]) | 
         #                                  (self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]), True, False).any(dim=-1)
