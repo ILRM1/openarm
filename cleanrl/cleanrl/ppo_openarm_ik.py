@@ -50,9 +50,9 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "Openarm_ik"
+    env_id: str = "Openarm_ik_skrl"
     """the id of the environment"""
-    total_timesteps: int = 100000000
+    total_timesteps: int = 10000000000
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
@@ -60,7 +60,7 @@ class Args:
     """the number of parallel game environments"""
     num_steps: int = 128
     """the number of steps to run in each environment per policy rollout"""
-    anneal_lr: bool = True
+    anneal_lr: bool = False
     """Toggle learning rate annealing for policy and value networks"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -93,15 +93,17 @@ class Args:
     """whether to record videos during training"""
     video_length: int = 1000
     """length of the recorded video (in steps)"""
-    video_interval: int = 20000
+    video_interval: int = 5000
     """interval between video recordings (in steps)"""
+    resume_path: str = ""
+    """path to checkpoint .pth file to resume training from"""
 
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
     minibatch_size: int = 0
     """the mini-batch size (computed in runtime)"""
-    num_iterations: int = 0
+    num_iterations: int = 100000000
     """the number of iterations (computed in runtime)"""
 
 
@@ -288,8 +290,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # append AppLauncher cli args
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.total_timesteps // args.batch_size
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    args.num_iterations = 100000000000
+    run_name = f"{args_cli.task}__{args.exp_name}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
 
@@ -340,6 +342,24 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     agent = Agent(envs.unwrapped).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
+    # Resume from checkpoint
+    start_global_step = 0
+    if args.resume_path:
+        print(f"[INFO] Resuming from checkpoint: {args.resume_path}")
+        ckpt = torch.load(args.resume_path, map_location=device)
+        if isinstance(ckpt, dict) and "agent" in ckpt:
+            agent.load_state_dict(ckpt["agent"])
+            optimizer.load_state_dict(ckpt["optimizer"])
+            start_global_step = ckpt.get("global_step", 0)
+        else:
+            # Legacy checkpoint: only agent state_dict
+            agent.load_state_dict(ckpt)
+            # Try to parse step count from filename, e.g. "..._step99942400.pth"
+            import re
+            m = re.search(r"_step(\d+)\.pth$", args.resume_path)
+            start_global_step = int(m.group(1)) if m else 0
+        print(f"[INFO] Resuming from global_step={start_global_step}")
+
     observation_space = (envs.unwrapped.cfg.num_observations
         + int(envs.unwrapped.cfg.head_img_width/2) * int(envs.unwrapped.cfg.head_img_height/2)
         + int(envs.unwrapped.cfg.wrist_img_width/2) * int(envs.unwrapped.cfg.wrist_img_height/2))
@@ -354,7 +374,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     
     record_reward = 0.
     # TRY NOT TO MODIFY: start the game
-    global_step = 0
+    global_step = start_global_step
+    start_iteration = start_global_step // args.batch_size + 1
     start_time = time.time()
     next_obs, _ = envs.reset(seed=args.seed)
     next_obs = torch.Tensor(next_obs).to(device)
@@ -364,13 +385,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         torch.zeros(agent.lstm.num_layers, args.num_envs, agent.lstm.hidden_size).to(device),
     )  # hidden and cell states (see https://youtu.be/8HyCNIVRbSU)
 
-    for iteration in range(1, args.num_iterations + 1):
+    for iteration in range(start_iteration, args.num_iterations + 1):
         initial_lstm_state = (next_lstm_state[0].clone(), next_lstm_state[1].clone())
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
             lrnow = frac * args.learning_rate
             optimizer.param_groups[0]["lr"] = lrnow
+            # Note: when resuming, iteration already starts from the correct point,
+            # so LR annealing correctly reflects the remaining fraction of training.
 
         for step in range(0, args.num_steps):
             global_step += args.num_envs
@@ -505,12 +528,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
         if args.save_model and args.save_interval > 0 and iteration % args.save_interval == 0:
             ckpt_path = f"runs/{run_name}/{args.exp_name}_step{global_step}.pth"
-            torch.save(agent.state_dict(), ckpt_path)
+            torch.save({
+                "agent": agent.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "global_step": global_step,
+            }, ckpt_path)
             print(f"[INFO] Checkpoint saved: {ckpt_path}")
 
     if args.save_model:
         model_path = f"runs/{run_name}/{args.exp_name}.pth"
-        torch.save(agent.state_dict(), model_path)
+        torch.save({
+            "agent": agent.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "global_step": global_step,
+        }, model_path)
         print(f"[INFO] Final model saved: {model_path}")
 
     envs.close()

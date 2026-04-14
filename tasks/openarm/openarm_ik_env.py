@@ -36,12 +36,10 @@ from isaacsim.core.utils.prims import set_prim_attribute_value
 from isaaclab.controllers import DifferentialIKController, DifferentialIKControllerCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_euler_xyz, euler_xyz_from_quat
+from isaaclab_tasks.utils import load_cfg_from_registry
 
 import torch.nn as nn
-from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
-from skrl.models.torch import GaussianMixin, DeterministicMixin, Model
-from skrl.resources.preprocessors.torch import RunningStandardScaler
-from isaaclab_tasks.utils import load_cfg_from_registry
+from ppo_openarm_ik import Agent
 
 from .openarm_env_cfg import OpenarmEnvCfg
 from .dextrah_kuka_allegro_utils import (
@@ -67,28 +65,6 @@ from .dextrah_kuka_allegro_constants import (
 # ADR imports
 from .dextrah_adr import DextrahADR
 
-class SharedModel(GaussianMixin, DeterministicMixin, Model):
-    def __init__(self, obs_space, act_space, device):
-        Model.__init__(self, obs_space, act_space, device)
-        GaussianMixin.__init__(self, clip_actions=False, clip_log_std=True,
-                               min_log_std=-20.0, max_log_std=2.0)
-        DeterministicMixin.__init__(self, clip_actions=False)
-
-        # names must match checkpoint keys exactly
-        self.net_container = nn.Sequential(
-            nn.Linear(self.num_observations, 64), nn.ELU(),
-            nn.Linear(64, 64), nn.ELU(),
-        )
-        self.policy_layer     = nn.Linear(64, self.num_actions)
-        self.value_layer      = nn.Linear(64, 1)
-        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions))
-
-    def compute(self, inputs, role):
-        x = self.net_container(inputs["states"])
-        if role == "policy":
-            return self.policy_layer(x), self.log_std_parameter, {}
-        elif role == "value":
-            return self.value_layer(x), {}
 
 class OpenarmEnv(DirectRLEnv):
     cfg: OpenarmEnvCfg
@@ -97,28 +73,12 @@ class OpenarmEnv(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
         env_cfg2 = load_cfg_from_registry("Openarm_ik", "env_cfg_entry_point")
-        env_cfg2.scene.num_envs = 56
-        env_cfg2.sim.device = self.device
-        ik_model = SharedModel(56, 14, self.device)
+        self.ik_agent = Agent(env_cfg2).to(self.device)
+        self.ik_agent.load_state_dict(torch.load(
+            "/home/namyeong/openarm_isaac_lab/logs/skrl/openarm_bi_reach/2026-04-09_05-53-51_ppo_torch/checkpoints/best_agent.pt", map_location=self.device))
+        self.ik_agent.eval()
 
-        ik_agent_cfg = PPO_DEFAULT_CONFIG.copy()
-        ik_agent_cfg["state_preprocessor"]        = RunningStandardScaler
-        ik_agent_cfg["state_preprocessor_kwargs"] = {"size": 56, "device": self.device}
-        ik_agent_cfg["value_preprocessor"]        = RunningStandardScaler
-        ik_agent_cfg["value_preprocessor_kwargs"] = {"size": 1, "device": self.device}
-
-        self.ik_agent = PPO(
-            models={"policy": ik_model, "value": ik_model},
-            memory=None,
-            cfg=ik_agent_cfg,
-            observation_space=56,
-            action_space=14,
-            device=self.device,
-        )
-
-        self.ik_agent.load("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/cleanrl/runs/best_agent.pt")
-        self.ik_agent.set_running_mode("eval")
-        self.ik_actions = torch.zeros((self.num_envs, 14), device=self.device)
+        self.ik_actions = torch.zeros((self.num_envs, 7), device=self.device)
         self.left_target_pose = torch.zeros((self.num_envs, 7), device=self.device)
 
         self.num_robot_dofs = self.robot.num_joints
@@ -588,10 +548,10 @@ class OpenarmEnv(DirectRLEnv):
         #self.left_target_pose = self.left_target_pose[] - self.scene.env_origins
         self.left_target_pose[:, :3] = self.object_pos
 
-        with torch.inference_mode():
-            ik_act_tuple = self.ik_agent.act(self.ik_observations(), timestep=0, timesteps=0)
-            self.ik_actions = ik_act_tuple[0]
-            self.joint_pos_des = ik_act_tuple[-1].get("mean_actions", ik_act_tuple[0])
+        with torch.no_grad():
+            self.ik_actions, logprob, _, value = self.ik_agent.get_action_and_value(self.ik_observations())
+            self.joint_pos_des = self.robot_dof_pos + 0.5 * self.ik_actions
+            self.joint_pos_des = torch.clamp(self.joint_pos_des, min=self.robot_dof_lower_limits[:,:7], max=self.robot_dof_upper_limits[:,:7])
 
         self.control_gripper_joint_pos = torch.where(self.left_gripper_action>0.5, 0.044, 0.)
 
@@ -1376,7 +1336,9 @@ class OpenarmEnv(DirectRLEnv):
                 # robot
                 self.robot_dof_pos, #7
                 self.robot_dof_vel, #7
-                self.left_target_pose,
+                self.left_tcp_pose[:, :3], 
+                self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], #7
+                self.left_target_pose, #7
                 self.ik_actions, #7
             ),
             dim=-1,
@@ -1491,7 +1453,7 @@ def compute_rewards(
     #object_to_goal_reward = torch.where(object_pos[:,2]>0.245, object_to_goal_reward, 0.)
     
     close_gripper_reward = 10.*torch.where(hand_to_object_pos_error<=0.015, torch.exp(-1. * gripper_action), 0.)
-    close_gripper_penalty = 0.3*torch.where(((hand_to_object_pos_error>0.015)) & (gripper_action<=0.5), -1., 0.)
+    close_gripper_penalty = 0.*torch.where(((hand_to_object_pos_error>0.015)) & (gripper_action<=0.5), -1., 0.)
    
     # Reward for lifting object off table and towards object goal
     lift_reward = lift_weight * torch.exp(-15. * object_vertical_error)

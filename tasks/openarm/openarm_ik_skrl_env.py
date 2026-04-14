@@ -36,7 +36,7 @@ from isaacsim.core.utils.prims import set_prim_attribute_value
 from isaaclab.controllers import DifferentialIKController, DifferentialIKControllerCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_euler_xyz, euler_xyz_from_quat
-
+from isaaclab_tasks.utils import load_cfg_from_registry
 import torch.nn as nn
 from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
 from skrl.models.torch import GaussianMixin, DeterministicMixin, Model
@@ -76,12 +76,12 @@ class SharedModel(GaussianMixin, DeterministicMixin, Model):
 
         # names must match checkpoint keys exactly
         self.net_container = nn.Sequential(
-            nn.Linear(self.num_observations, 64), nn.ELU(),
+            nn.Linear(obs_space, 64), nn.ELU(),
             nn.Linear(64, 64), nn.ELU(),
         )
-        self.policy_layer     = nn.Linear(64, self.num_actions)
+        self.policy_layer     = nn.Linear(64, self.action_space)
         self.value_layer      = nn.Linear(64, 1)
-        self.log_std_parameter = nn.Parameter(torch.zeros(self.num_actions))
+        self.log_std_parameter = nn.Parameter(torch.zeros(act_space))
 
     def compute(self, inputs, role):
         x = self.net_container(inputs["states"])
@@ -96,14 +96,13 @@ class OpenarmEnv(DirectRLEnv):
     def __init__(self, cfg: OpenarmEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
-        env_cfg2 = load_cfg_from_registry("Openarm_ik", "env_cfg_entry_point")
-        env_cfg2.scene.num_envs = 56
+        env_cfg2 = load_cfg_from_registry("Openarm_ik_skrl", "env_cfg_entry_point")
         env_cfg2.sim.device = self.device
-        ik_model = SharedModel(56, 14, self.device)
+        ik_model = SharedModel(28, 7, self.device)
 
         ik_agent_cfg = PPO_DEFAULT_CONFIG.copy()
         ik_agent_cfg["state_preprocessor"]        = RunningStandardScaler
-        ik_agent_cfg["state_preprocessor_kwargs"] = {"size": 56, "device": self.device}
+        ik_agent_cfg["state_preprocessor_kwargs"] = {"size": 28, "device": self.device}
         ik_agent_cfg["value_preprocessor"]        = RunningStandardScaler
         ik_agent_cfg["value_preprocessor_kwargs"] = {"size": 1, "device": self.device}
 
@@ -111,15 +110,15 @@ class OpenarmEnv(DirectRLEnv):
             models={"policy": ik_model, "value": ik_model},
             memory=None,
             cfg=ik_agent_cfg,
-            observation_space=56,
-            action_space=14,
+            observation_space=28,
+            action_space=7,
             device=self.device,
         )
 
         self.ik_agent.load("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/cleanrl/runs/best_agent.pt")
         self.ik_agent.set_running_mode("eval")
-        self.ik_actions = torch.zeros((self.num_envs, 14), device=self.device)
-        self.left_target_pose = torch.zeros((self.num_envs, 7), device=self.device)
+        self.ik_actions = torch.zeros((self.num_envs, 7), device=self.device)
+        self.left_target_pose = torch.zeros((self.num_envs, 7), device=self.device)        
 
         self.num_robot_dofs = self.robot.num_joints
         self.action_scale = self.cfg.action_scale
@@ -155,7 +154,7 @@ class OpenarmEnv(DirectRLEnv):
 
         # Setting the target position for the object
         # TODO: need to make these goals dynamic, sampled at the start of the rollout
-        self.object_goal = torch.tensor([0.25, 0.15, 0.26], device=self.device).repeat((self.num_envs, 1))
+        self.object_goal = torch.tensor([0.25, 0.15, 0.3], device=self.device).repeat((self.num_envs, 1))
        
         # Nominal reset states for the robot
         self.robot_start_joint_pos =torch.tensor([0.63, -0.35,  -0.24,  2.0, -0.54, 0.0, 1.1,
@@ -584,14 +583,10 @@ class OpenarmEnv(DirectRLEnv):
         left_target_quat = quat_from_euler_xyz(left_target_ori[:, 0], left_target_ori[:, 1], left_target_ori[:, 2])
         self.left_target_pose = torch.cat((left_target_pos, left_target_quat), dim=-1).to(dtype=self.left_tcp_pose.dtype)
 
-        self.left_target_pose = self.robot.data.body_pose_w[:, self.left_tcp_id] 
-        #self.left_target_pose = self.left_target_pose[] - self.scene.env_origins
-        self.left_target_pose[:, :3] = self.object_pos
-
         with torch.inference_mode():
             ik_act_tuple = self.ik_agent.act(self.ik_observations(), timestep=0, timesteps=0)
-            self.ik_actions = ik_act_tuple[0]
-            self.joint_pos_des = ik_act_tuple[-1].get("mean_actions", ik_act_tuple[0])[:, :7]
+            self.ik_actions = ik_act_tuple[-1].get("mean_actions", ik_act_tuple[0])
+            self.joint_pos_des = self.ik_actions*0.5 + self.robot.data.default_joint_pos[:, self.left_arm_joint_id] 
 
         self.control_gripper_joint_pos = torch.where(self.left_gripper_action>0.5, 0.044, 0.)
 
@@ -729,9 +724,9 @@ class OpenarmEnv(DirectRLEnv):
         self.extras["object_to_goal_reward"] = object_to_goal_reward.mean()
         self.extras["lift_reward"] = lift_reward.mean()
 
-        total_reward = 0.01 * (hand_to_object_reward + object_to_goal_reward + close_gripper_reward).clamp(min=0.)
+        total_reward = 0.01 * (hand_to_object_reward + lift_reward + close_gripper_reward).clamp(min=0.)
 
-        total_reward = torch.where(self.in_success_region, total_reward+0.5, total_reward)
+        #total_reward = torch.where(self.in_success_region, total_reward+0.3, total_reward)
         total_reward = torch.where(self.out_of_joint_limit, 0., total_reward)
 
         # Log other information
@@ -751,11 +746,20 @@ class OpenarmEnv(DirectRLEnv):
         # the allowable work volume as set by fabrics
 
         # If Z is too low, then it has probably fallen off
-        object_outside_upper_x = self.object_pos[:,0] > (self.cfg.x_center + self.cfg.x_width / 2.)
-        object_outside_lower_x = self.object_pos[:,0] < (self.cfg.x_center - self.cfg.x_width / 2.)
+        object_outside_upper_x = self.object_pos[:,0] > (self.cfg.x_center + self.cfg.x_width / 2.)+0.05
+        object_outside_lower_x = self.object_pos[:,0] < (self.cfg.x_center - self.cfg.x_width / 2.)-0.05
 
-        object_outside_upper_y = self.object_pos[:,1] > (self.cfg.y_center + self.cfg.y_width / 2.)
-        object_outside_lower_y = self.object_pos[:,1] < (self.cfg.y_center - self.cfg.y_width / 2.)
+        object_outside_upper_y = self.object_pos[:,1] > (self.cfg.y_center + self.cfg.y_width / 2.)+0.05
+        object_outside_lower_y = self.object_pos[:,1] < (self.cfg.y_center - self.cfg.y_width / 2.)-0.05
+
+        tip_outside_upper_x = self.left_tcp_pose[:,0] > (self.cfg.x_center + self.cfg.x_width / 2.) +0.1
+        tip_outside_lower_x = self.left_tcp_pose[:,0] < 0.
+
+        tip_outside_upper_y = self.left_tcp_pose[:,1] > (self.cfg.y_center + self.cfg.y_width / 2.)+0.1
+        tip_outside_lower_y = self.left_tcp_pose[:,1] < (self.cfg.y_center - self.cfg.y_width / 2.)-0.1
+
+        tip_outside_upper_z = self.left_tcp_pose[:,2] > 0.5
+        tip_outside_lower_z = self.left_tcp_pose[:,2] < 0.15
 
         z_height_cutoff = 0.15
         object_too_low = self.object_pos[:,2] < z_height_cutoff
@@ -764,13 +768,19 @@ class OpenarmEnv(DirectRLEnv):
                        object_outside_lower_x | \
                        object_outside_upper_y | \
                        object_outside_lower_y | \
-                       object_too_low
+                       object_too_low | \
+                       tip_outside_upper_x | \
+                       tip_outside_lower_x | \
+                       tip_outside_upper_y | \
+                       tip_outside_lower_y | \
+                       tip_outside_upper_z | \
+                       tip_outside_lower_z
     
         # self.out_of_joint_limit = torch.where((self.robot_dof_pos[:,3] >= self.robot_dof_upper_limits[0, 3]) | 
         #                                  (self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]), True, False).any(dim=-1)
 
-        self.out_of_joint_limit = self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]                       
-   
+        self.out_of_joint_limit = self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]
+    
         teriminated = out_of_reach | self.out_of_joint_limit
         
         # Terminate rollout if maximum episode length reached
@@ -819,10 +829,15 @@ class OpenarmEnv(DirectRLEnv):
 #        )
         #object_start_state[:, 3] = 1.
         rotation = self.dextrah_adr.get_custom_param_value("object_spawn", "rotation")
-        rot_noise = sample_uniform(-rotation, rotation, (num_ids, 2), device=self.device)  # noise for X and Y rotation
-        object_start_state[env_ids, 3:7] = randomize_rotation(
-            rot_noise[:, 0], rot_noise[:, 1], self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids]
-        )
+        # rot_noise = sample_uniform(-rotation, rotation, (num_ids, 2), device=self.device)  # noise for X and Y rotation
+        # object_start_state[env_ids, 3:7] = randomize_rotation(
+        #     rot_noise[:, 0], rot_noise[:, 1], self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids]
+        # )
+
+        z_angle = sample_uniform(-rotation * np.pi, rotation * np.pi, (num_ids,), device=self.device)
+        z_axis = torch.zeros(num_ids, 3, device=self.device)
+        z_axis[:, 2] = 1.0
+        object_start_state[env_ids, 3:7] = quat_from_angle_axis(z_angle, z_axis)
 
         # # Fixed Z-axis rotation
         # z_angle_deg = 25.0  # degrees
@@ -840,7 +855,7 @@ class OpenarmEnv(DirectRLEnv):
         )
 
         self.object.write_root_state_to_sim(object_default_state, env_ids)
-
+     
         # Spawning robot
         joint_pos_noise = self.dextrah_adr.get_custom_param_value("robot_spawn" ,"joint_pos_noise")
         joint_vel_noise = self.dextrah_adr.get_custom_param_value("robot_spawn" ,"joint_vel_noise")
@@ -1158,6 +1173,9 @@ class OpenarmEnv(DirectRLEnv):
         self.left_gripper_action = torch.ones(self.num_envs, device=self.device)
         self.pre_obj_pos = self.object_pos.clone()
 
+        self.ik_actions = torch.zeros((self.num_envs, 7), device=self.device)
+        self.left_target_pose =self.robot.data.body_pose_w[:, self.left_tcp_id] 
+
     def _compute_intermediate_values(self):
         # Data from robot--------------------------
         # Robot measured joint position and velocity
@@ -1245,7 +1263,7 @@ class OpenarmEnv(DirectRLEnv):
         self.object_vertical_error = torch.abs(self.object_goal[:, 2] - self.object_pos[:, 2])
 
         # Calculate whether object is within success region
-        self.in_success_region = self.object_to_object_goal_pos_error < self.cfg.object_goal_tol
+        self.in_success_region = self.object_vertical_error < self.cfg.object_goal_tol
         # if not in success region, reset time in success region, else increment
         self.time_in_success_region = torch.where(
             self.in_success_region,
@@ -1369,17 +1387,14 @@ class OpenarmEnv(DirectRLEnv):
         )
 
         return obs
-    
+
     def ik_observations(self):
         obs = torch.cat(
             (
                 # robot
-                self.robot_dof_pos, #7
-                self.robot.data.joint_pos[:, self.right_arm_joint_id], #7
-                self.robot_dof_vel, #7
-                self.robot.data.joint_vel[:, self.right_arm_joint_id], #7
-                self.left_target_pose,
-                torch.zeros_like(self.left_target_pose),
+                self.robot_dof_pos - self.robot.data.default_joint_pos[:, self.left_arm_joint_id], #7
+                self.robot_dof_vel - self.robot.data.default_joint_vel[:, self.left_arm_joint_id], #7
+                self.left_target_pose, #7
                 self.ik_actions, #7
             ),
             dim=-1,
@@ -1493,12 +1508,12 @@ def compute_rewards(
     object_to_goal_reward = 0. * torch.exp(object_to_goal_sharpness * object_to_object_goal_pos_error)
     #object_to_goal_reward = torch.where(object_pos[:,2]>0.245, object_to_goal_reward, 0.)
     
-    close_gripper_reward = 10.*torch.where(hand_to_object_pos_error<=0.015, torch.exp(-1. * gripper_action), 0.)
-    close_gripper_penalty = 0.3*torch.where(((hand_to_object_pos_error>0.015)) & (gripper_action<=0.5), -1., 0.)
+    close_gripper_reward = 20.*torch.where(hand_to_object_pos_error<=0.015, torch.exp(-3. * gripper_action), 0.)
+    close_gripper_penalty = torch.exp(-15. * hand_to_object_pos_error)*torch.where(((hand_to_object_pos_error>0.015)) & (gripper_action<=0.5), -1., 0.)
    
     # Reward for lifting object off table and towards object goal
-    lift_reward = lift_weight * torch.exp(-15. * object_vertical_error)
-    #lift_reward = torch.where(object_pos[:,2]>0.245, lift_reward, 0.)
+    lift_reward = 10. * torch.exp(-15. * object_vertical_error)
+    lift_reward = torch.where(object_pos[:,2]>0.245, lift_reward, 0.)
 
     return hand_to_object_reward, object_to_goal_reward, close_gripper_reward+close_gripper_penalty, lift_reward
 

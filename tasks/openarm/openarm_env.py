@@ -532,7 +532,6 @@ class OpenarmEnv(DirectRLEnv):
         # left_axis = left_target_ori / (left_angle.unsqueeze(-1) + 1e-8)
         # left_target_quat = quat_from_angle_axis(left_angle, left_axis)
         left_target_pose = torch.cat((left_target_pos, left_target_quat), dim=-1).to(dtype=self.left_tcp_pose.dtype)
-    
         left_target_pose[:, :3] =  left_target_pose[:, :3] - self.scene.env_origins
 
         self.diff_ik_controller.reset()
@@ -677,7 +676,7 @@ class OpenarmEnv(DirectRLEnv):
 
         total_reward = 0.01 * (hand_to_object_reward + lift_reward + close_gripper_reward).clamp(min=0.)
 
-        #total_reward = torch.where(self.in_success_region, total_reward+0.5, total_reward)
+        #total_reward = torch.where(self.in_success_region, total_reward+0.3, total_reward)
         total_reward = torch.where(self.out_of_joint_limit, 0., total_reward)
 
         # Log other information
@@ -697,20 +696,20 @@ class OpenarmEnv(DirectRLEnv):
         # the allowable work volume as set by fabrics
 
         # If Z is too low, then it has probably fallen off
-        object_outside_upper_x = self.object_pos[:,0] > (self.cfg.x_center + self.cfg.x_width / 2.)
-        object_outside_lower_x = self.object_pos[:,0] < (self.cfg.x_center - self.cfg.x_width / 2.)
+        object_outside_upper_x = self.object_pos[:,0] > (self.cfg.x_center + self.cfg.x_width / 2.)+0.05
+        object_outside_lower_x = self.object_pos[:,0] < (self.cfg.x_center - self.cfg.x_width / 2.)-0.05
 
-        object_outside_upper_y = self.object_pos[:,1] > (self.cfg.y_center + self.cfg.y_width / 2.)
-        object_outside_lower_y = self.object_pos[:,1] < (self.cfg.y_center - self.cfg.y_width / 2.)
+        object_outside_upper_y = self.object_pos[:,1] > (self.cfg.y_center + self.cfg.y_width / 2.)+0.05
+        object_outside_lower_y = self.object_pos[:,1] < (self.cfg.y_center - self.cfg.y_width / 2.)-0.05
 
         tip_outside_upper_x = self.left_tcp_pose[:,0] > (self.cfg.x_center + self.cfg.x_width / 2.) +0.1
-        tip_outside_lower_x = self.left_tcp_pose[:,0] < (self.cfg.x_center - self.cfg.x_width / 2.) -0.1
+        tip_outside_lower_x = self.left_tcp_pose[:,0] < 0.
 
         tip_outside_upper_y = self.left_tcp_pose[:,1] > (self.cfg.y_center + self.cfg.y_width / 2.)+0.1
         tip_outside_lower_y = self.left_tcp_pose[:,1] < (self.cfg.y_center - self.cfg.y_width / 2.)-0.1
 
-        tip_outside_upper_z = self.left_tcp_pose[:,2] > 0.4
-        tip_outside_lower_z = self.left_tcp_pose[:,2] < 0.2
+        tip_outside_upper_z = self.left_tcp_pose[:,2] > 0.5
+        tip_outside_lower_z = self.left_tcp_pose[:,2] < 0.15
 
         z_height_cutoff = 0.15
         object_too_low = self.object_pos[:,2] < z_height_cutoff
@@ -730,8 +729,8 @@ class OpenarmEnv(DirectRLEnv):
         # self.out_of_joint_limit = torch.where((self.robot_dof_pos[:,3] >= self.robot_dof_upper_limits[0, 3]) | 
         #                                  (self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]), True, False).any(dim=-1)
 
-        self.out_of_joint_limit = self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]                       
-   
+        self.out_of_joint_limit = self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]
+    
         teriminated = out_of_reach | self.out_of_joint_limit
         
         # Terminate rollout if maximum episode length reached
@@ -780,10 +779,15 @@ class OpenarmEnv(DirectRLEnv):
 #        )
         #object_start_state[:, 3] = 1.
         rotation = self.dextrah_adr.get_custom_param_value("object_spawn", "rotation")
-        rot_noise = sample_uniform(-rotation, rotation, (num_ids, 2), device=self.device)  # noise for X and Y rotation
-        object_start_state[env_ids, 3:7] = randomize_rotation(
-            rot_noise[:, 0], rot_noise[:, 1], self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids]
-        )
+        # rot_noise = sample_uniform(-rotation, rotation, (num_ids, 2), device=self.device)  # noise for X and Y rotation
+        # object_start_state[env_ids, 3:7] = randomize_rotation(
+        #     rot_noise[:, 0], rot_noise[:, 1], self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids]
+        # )
+
+        z_angle = sample_uniform(-rotation * np.pi, rotation * np.pi, (num_ids,), device=self.device)
+        z_axis = torch.zeros(num_ids, 3, device=self.device)
+        z_axis[:, 2] = 1.0
+        object_start_state[env_ids, 3:7] = quat_from_angle_axis(z_angle, z_axis)
 
         # # Fixed Z-axis rotation
         # z_angle_deg = 25.0  # degrees
@@ -1437,8 +1441,8 @@ def compute_rewards(
     object_to_goal_reward = 0. * torch.exp(object_to_goal_sharpness * object_to_object_goal_pos_error)
     #object_to_goal_reward = torch.where(object_pos[:,2]>0.245, object_to_goal_reward, 0.)
     
-    close_gripper_reward = 10.*torch.where(hand_to_object_pos_error<=0.015, torch.exp(-3. * gripper_action), 0.)
-    close_gripper_penalty = 0.3*torch.where(((hand_to_object_pos_error>0.015)) & (gripper_action<=0.5), -1., 0.)
+    close_gripper_reward = 20.*torch.where(hand_to_object_pos_error<=0.015, torch.exp(-3. * gripper_action), 0.)
+    close_gripper_penalty = torch.exp(-15. * hand_to_object_pos_error)*torch.where(((hand_to_object_pos_error>0.015)) & (gripper_action<=0.5), -1., 0.)
    
     # Reward for lifting object off table and towards object goal
     lift_reward = 10. * torch.exp(-15. * object_vertical_error)

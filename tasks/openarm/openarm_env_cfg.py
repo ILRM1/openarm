@@ -171,21 +171,21 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             pos=(0.0, 0.0, 0.0),
             rot=(1.0, 0.0, 0.0, 0.0),
             joint_pos={
-                    "openarm_left_joint1": -0.24,
-                    "openarm_left_joint2": -1.05,
-                    "openarm_left_joint3": 0.74,
-                    "openarm_left_joint4": 1.86,
-                    "openarm_left_joint5": -1.12,
+                    "openarm_left_joint1": 0.63,
+                    "openarm_left_joint2": -0.35,
+                    "openarm_left_joint3": -0.24,
+                    "openarm_left_joint4": 2.0,
+                    "openarm_left_joint5": -0.54,
                     "openarm_left_joint6": 0.,
-                    "openarm_left_joint7": 0.94,
+                    "openarm_left_joint7": 1.1,
 
-                    "openarm_right_joint1": 0.24,
-                    "openarm_right_joint2": 1.05,
-                    "openarm_right_joint3": -0.74,
-                    "openarm_right_joint4": 1.86,
-                    "openarm_right_joint5": 1.12,
-                    "openarm_right_joint6": 0.17,
-                    "openarm_right_joint7": -0.94,
+                    "openarm_right_joint1": -0.63,
+                    "openarm_right_joint2": 0.35,
+                    "openarm_right_joint3": 0.24,
+                    "openarm_right_joint4": 2.0,
+                    "openarm_right_joint5": 0.54,
+                    "openarm_right_joint6": 0.0,
+                    "openarm_right_joint7": -1.1,
 
                     "openarm_left_finger_joint.*": 0.044,
                     "openarm_right_finger_joint.*": 0.044,
@@ -423,8 +423,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # Object spawning params
     x_center = 0.25
     x_width = 0.15
-    y_center = 0.15
-    y_width = 0.25 
+    y_center = 0.2
+    y_width = 0.15 
 
     # DR Controls
     enable_adr = True
@@ -487,7 +487,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # NOTE: first number in range is the starting value, second number is terminal value
     adr_custom_cfg_dict = {
         "object_wrench": {
-            "max_linear_accel": (0., 10.)
+            "max_linear_accel": (0., 0.)
         },
         "object_spawn": {
             "x_width_spawn": (0., x_width),
