@@ -662,11 +662,6 @@ class OpenarmEnv(DirectRLEnv):
             )
 
         print("hand to obj: %0.3f" % self.hand_to_object_pos_error[0].item())
-        print("obj to goal: %0.3f" % self.object_to_object_goal_pos_error[0].item())
-        print("obj vertical: %0.3f" % self.object_vertical_error[0].item())
-        print("gripper: %0.1f" % self.left_gripper_action[0].item())
-        print("success rate: %0.2f" % self.in_success_region.float().mean().item())
-        print(self.dextrah_adr.get_custom_param_value("reward_weights", "lift_weight"))
         print("--------------------------------------------------------------------")
 
         # Add reward signals to tensorboard
@@ -676,7 +671,7 @@ class OpenarmEnv(DirectRLEnv):
 
         total_reward = 0.01 * (hand_to_object_reward + lift_reward + close_gripper_reward).clamp(min=0.)
 
-        #total_reward = torch.where(self.in_success_region, total_reward+0.3, total_reward)
+        #total_reward = torch.where(self.in_success_region, total_reward+0.5, total_reward)
         total_reward = torch.where(self.out_of_joint_limit, 0., total_reward)
 
         # Log other information
@@ -742,8 +737,11 @@ class OpenarmEnv(DirectRLEnv):
         else:
             time_out = self.episode_length_buf >= self.max_episode_length - 1
 
+        if self.object_pos[:,2] > 0.28:
+            print("time: %0.1f" % (self.episode_length_buf/60.).item())
+           
         #return out_of_reach, time_out
-        return teriminated, time_out
+        return self.object_pos[:,2] > 0.29, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:
@@ -778,6 +776,7 @@ class OpenarmEnv(DirectRLEnv):
 #            rot_noise[:, 0], rot_noise[:, 1], self.x_unit_tensor[env_ids], self.y_unit_tensor[env_ids]
 #        )
         #object_start_state[:, 3] = 1.
+
         rotation = self.dextrah_adr.get_custom_param_value("object_spawn", "rotation")
         # rot_noise = sample_uniform(-rotation, rotation, (num_ids, 2), device=self.device)  # noise for X and Y rotation
         # object_start_state[env_ids, 3:7] = randomize_rotation(
@@ -1154,7 +1153,7 @@ class OpenarmEnv(DirectRLEnv):
         left_target_euler = torch.stack(euler_xyz_from_quat(self.left_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
         #left_target_euler = axis_angle_from_quat(self.left_tcp_pose[:, 3:])
         self.left_tcp_pose = torch.cat((self.left_tcp_pose[:, :3], left_target_euler), dim=-1)
-
+      
         right_target_euler = torch.stack(euler_xyz_from_quat(self.right_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
         self.right_tcp_pose = torch.cat((self.right_tcp_pose[:, :3], right_target_euler), dim=-1)
 
@@ -1445,7 +1444,7 @@ def compute_rewards(
     close_gripper_penalty = torch.exp(-15. * hand_to_object_pos_error)*torch.where(((hand_to_object_pos_error>0.015)) & (gripper_action<=0.5), -1., 0.)
    
     # Reward for lifting object off table and towards object goal
-    lift_reward = 10. * torch.exp(-15. * object_vertical_error)
+    lift_reward = 30. * torch.exp(-30. * object_vertical_error)
     lift_reward = torch.where(object_pos[:,2]>0.245, lift_reward, 0.)
 
     return hand_to_object_reward, object_to_goal_reward, close_gripper_reward+close_gripper_penalty, lift_reward

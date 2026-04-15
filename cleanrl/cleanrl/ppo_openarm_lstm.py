@@ -82,7 +82,7 @@ class Args:
     """coefficient of the value function"""
     max_grad_norm: float = 0.5
     """the maximum norm for the gradient clipping"""
-    target_kl: float = 0.016
+    target_kl: float = None
     """the target KL divergence threshold"""
 
     save_model: bool = True
@@ -149,14 +149,17 @@ class Agent(nn.Module):
     def __init__(self, envs):
         super().__init__()
 
-        self.img_w, self.img_h = int(envs.cfg.head_img_width/2), int(envs.cfg.head_img_height/2)
+        self.img_w, self.img_h = int(envs.cfg.head_img_width), int(envs.cfg.head_img_height)
         self.proprio_dim = envs.cfg.num_observations
 
         # Separate CNNs for head and wrist
         self.head_cnn, self.head_lns, self.head_pool = self._make_cnn()
         self.wrist_cnn, self.wrist_lns, self.wrist_pool = self._make_cnn()
 
-        self.lstm = nn.LSTM(128 + 128 + self.proprio_dim, 1024, num_layers=2)
+        self.head_fc = nn.Linear(3072, 32)
+        self.wrist_fc = nn.Linear(3072, 32)
+
+        self.lstm = nn.LSTM(32 + 32 + self.proprio_dim, 1024, num_layers=2)
         for name, param in self.lstm.named_parameters():
             if "bias" in name:
                 nn.init.constant_(param, 0)
@@ -175,10 +178,10 @@ class Agent(nn.Module):
 
     def _make_cnn(self):
         convs = nn.ModuleList([
-            nn.Conv2d(1,  16, kernel_size=8, stride=4),
-            nn.Conv2d(16, 32, kernel_size=6, stride=2),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
-            nn.Conv2d(64, 128, kernel_size=4, stride=2),
+            nn.Conv2d(1,  16, kernel_size=8, stride=2),
+            nn.Conv2d(16, 32, kernel_size=4, stride=2),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2),
         ])
         lns = nn.ModuleList()
         x = torch.zeros(1, 1, self.img_h, self.img_w)
@@ -188,11 +191,13 @@ class Agent(nn.Module):
         pool = nn.AdaptiveAvgPool2d((1, 1))
         return convs, lns, pool
 
-    def _cnn_forward(self, x, convs, lns, pool):
+    def _cnn_forward(self, x, convs, lns, pool, fc):
         for conv, ln in zip(convs, lns):
             x = F.relu(ln(conv(x)))
-        x = pool(x)
+        
         x = x.flatten(1)
+        x = fc(x)
+
         return x
 
     def get_states(self, x, lstm_state, done):
@@ -206,8 +211,8 @@ class Agent(nn.Module):
         # img_uint8 = (img_norm * 255).astype("uint8")
         # cv2.imwrite("depth_debug.png", img_uint8)
 
-        head_cnn_out = self._cnn_forward(head_depth/2., self.head_cnn, self.head_lns, self.head_pool)
-        wrist_cnn_out = self._cnn_forward(wrist_L_depth/2., self.wrist_cnn, self.wrist_lns, self.wrist_pool)
+        head_cnn_out = self._cnn_forward(head_depth/2., self.head_cnn, self.head_lns, self.head_pool, self.head_fc)
+        wrist_cnn_out = self._cnn_forward(wrist_L_depth/2., self.wrist_cnn, self.wrist_lns, self.wrist_pool, self.wrist_fc)
         hidden = torch.cat([head_cnn_out, wrist_cnn_out, proprio], dim=-1)
 
         # LSTM logic
@@ -253,6 +258,120 @@ class Agent(nn.Module):
         action = probs.sample()
 
         return action, action_mean, action_std, lstm_state
+
+# class Agent(nn.Module):
+#     def __init__(self, envs):
+#         super().__init__()
+
+#         self.img_w, self.img_h = int(envs.cfg.head_img_width), int(envs.cfg.head_img_height)
+#         self.proprio_dim = envs.cfg.num_observations
+
+#         # Separate CNNs for head and wrist
+#         self.head_cnn, self.head_lns, self.head_pool = self._make_cnn()
+#         self.wrist_cnn, self.wrist_lns, self.wrist_pool = self._make_cnn()
+
+#         self.head_fc = nn.Linear(256, 32)
+#         self.wrist_fc = nn.Linear(256, 32)
+
+#         self.lstm = nn.LSTM(32 + 32 + self.proprio_dim, 1024, num_layers=2)
+#         for name, param in self.lstm.named_parameters():
+#             if "bias" in name:
+#                 nn.init.constant_(param, 0)
+#             elif "weight" in name:
+#                 nn.init.orthogonal_(param, 1.0)
+
+#         self.mlp = nn.Sequential(
+#             nn.Linear(1024, 512), nn.ELU(),
+#             nn.Linear(512,  512), nn.ELU(),
+#             nn.Linear(512,  256), nn.ELU(),
+#         )
+
+#         self.actor_mean = layer_init(nn.Linear(256, envs.cfg.num_actions), std=0.1)
+#         self.actor_logstd = nn.Parameter(torch.zeros(1, envs.cfg.num_actions))
+#         self.critic = layer_init(nn.Linear(256, 1), std=1.0)
+
+#     def _make_cnn(self):
+#         convs = nn.ModuleList([
+#             nn.Conv2d(1,  16, kernel_size=8, stride=4),
+#             nn.Conv2d(16, 32, kernel_size=4, stride=2),
+#             nn.Conv2d(32, 64, kernel_size=3, stride=2),
+#             nn.Conv2d(64, 128, kernel_size=3, stride=2),
+#         ])
+#         lns = nn.ModuleList()
+#         x = torch.zeros(1, 1, self.img_h, self.img_w)
+#         for conv in convs:
+#             x = conv(x)
+#             lns.append(nn.LayerNorm(x.shape[1:]))
+#         pool = nn.AdaptiveAvgPool2d((1, 1))
+#         return convs, lns, pool
+
+#     def _cnn_forward(self, x, convs, lns, pool, fc):
+#         for conv, ln in zip(convs, lns):
+#             x = F.relu(ln(conv(x)))
+        
+#         x = x.flatten(1)
+#         x = fc(x)
+
+#         return x
+
+#     def get_states(self, x, lstm_state, done):
+        
+#         proprio, head_depth, wrist_L_depth = _split_obs(x, self.img_h, self.img_w, self.proprio_dim)
+
+#         # import cv2
+#         # img = wrist_L_depth[0, 0].detach().cpu().numpy()
+#         # # normalize to 0~255
+#         # img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
+#         # img_uint8 = (img_norm * 255).astype("uint8")
+#         # cv2.imwrite("depth_debug.png", img_uint8)
+
+#         head_cnn_out = self._cnn_forward(head_depth/2., self.head_cnn, self.head_lns, self.head_pool, self.head_fc)
+#         wrist_cnn_out = self._cnn_forward(wrist_L_depth/2., self.wrist_cnn, self.wrist_lns, self.wrist_pool, self.wrist_fc)
+#         hidden = torch.cat([head_cnn_out, wrist_cnn_out, proprio], dim=-1)
+
+#         # LSTM logic
+#         batch_size = lstm_state[0].shape[1]
+#         hidden = hidden.reshape((-1, batch_size, self.lstm.input_size))
+#         done = done.float().reshape((-1, batch_size))
+#         new_hidden = []
+#         for h, d in zip(hidden, done):
+#             h, lstm_state = self.lstm(
+#                 h.unsqueeze(0),
+#                 (
+#                     (1.0 - d).view(1, -1, 1) * lstm_state[0],
+#                     (1.0 - d).view(1, -1, 1) * lstm_state[1],
+#                 ),
+#             )
+#             new_hidden += [h]
+#         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
+#         return new_hidden, lstm_state
+
+#     def get_value(self, x, lstm_state, done):
+#         hidden, _ = self.get_states(x, lstm_state, done)
+#         hidden = self.mlp(hidden)
+#         return self.critic(hidden)
+
+#     def get_action_and_value(self, x, lstm_state, done, action=None):
+#         hidden, lstm_state = self.get_states(x, lstm_state, done)
+#         hidden = self.mlp(hidden)
+#         action_mean = self.actor_mean(hidden)
+#         action_logstd = self.actor_logstd.expand_as(action_mean)
+#         action_std = torch.exp(action_logstd)
+#         probs = Normal(action_mean, action_std)
+#         if action is None:
+#             action = probs.sample()
+#         return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(hidden), lstm_state
+
+#     def get_action_mu_sigma(self, x, lstm_state, done):
+#         hidden, lstm_state = self.get_states(x, lstm_state, done)
+#         hidden = self.mlp(hidden)
+#         action_mean = self.actor_mean(hidden)
+#         action_logstd = self.actor_logstd.expand_as(action_mean)
+#         action_std = torch.exp(action_logstd)
+#         probs = Normal(action_mean, action_std)
+#         action = probs.sample()
+
+#         return action, action_mean, action_std, lstm_state
     
 
 args = tyro.cli(Args)
@@ -361,8 +480,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         print(f"[INFO] Resuming from global_step={start_global_step}")
 
     observation_space = (envs.unwrapped.cfg.num_observations
-        + int(envs.unwrapped.cfg.head_img_width/2) * int(envs.unwrapped.cfg.head_img_height/2)
-        + int(envs.unwrapped.cfg.wrist_img_width/2) * int(envs.unwrapped.cfg.wrist_img_height/2))
+        + int(envs.unwrapped.cfg.head_img_width) * int(envs.unwrapped.cfg.head_img_height)
+        + int(envs.unwrapped.cfg.wrist_img_width) * int(envs.unwrapped.cfg.wrist_img_height))
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + (observation_space,)).to(device)

@@ -165,6 +165,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             gpu_max_rigid_patch_count=4 * 5 * 2**15
         ),
     )
+    
     # robot
     robot_cfg: ArticulationCfg = OPEN_ARM_HIGH_PD_CFG.replace(prim_path="/World/envs/env_.*/Robot").replace(
         init_state=ArticulationCfg.InitialStateCfg(
@@ -264,7 +265,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             rot=(1.0, 0.0, 0.0, 0.0)),
     )
     # distillation related parameters
-    img_width = 120  
+    img_width = 120
     img_height = 96
     camera_rand_rot_range = 3
     camera_rand_pos_range = 0.03
@@ -424,12 +425,12 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     x_center = 0.25
     x_width = 0.15
     y_center = 0.2
-    y_width = 0.15
+    y_width = 0.15 
 
     # DR Controls
     enable_adr = True
     num_adr_increments = 50
-    starting_adr_increments = 0 # 0 for no DR up to num_adr_increments for max DR 
+    starting_adr_increments = 50 # 0 for no DR up to num_adr_increments for max DR 
 
     # Default dof friction coefficients
     # NOTE: these are set based on how far out they will scale multiplicatively
@@ -471,9 +472,9 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     }
 
     # Object disturbance wrench fixed params
-    wrench_trigger_every = int(1. / (decimation * sim_dt)) # 1 sec
+    wrench_trigger_every = int(5 / (decimation * sim_dt)) # 1 sec
     torsional_radius = 0.01 # m
-    hand_to_object_dist_threshold = .3 # m
+    hand_to_object_dist_threshold = .2 # m
     #wrench_prob_per_rollout = 0. # NOTE: currently not used
 
     # Object scaling
@@ -487,7 +488,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # NOTE: first number in range is the starting value, second number is terminal value
     adr_custom_cfg_dict = {
         "object_wrench": {
-            "max_linear_accel": (0., 0.)
+            "max_linear_accel": (0., 5.)
         },
         "object_spawn": {
             "x_width_spawn": (0., x_width),
