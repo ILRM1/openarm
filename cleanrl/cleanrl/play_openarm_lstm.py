@@ -15,7 +15,8 @@ from torch.utils.tensorboard import SummaryWriter
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Run trained OpenArm LSTM policy.")
-parser.add_argument("--checkpoint", type=str, default="/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/cleanrl/runs/Openarm__ppo_openarm_lstm__1__1776147867/ppo_openarm_lstm_step488243200.pth", help="Path to .pth checkpoint file.")
+parser.add_argument("--checkpoint", type=str, default="/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/cleanrl/runs/ppo_openarm_lstm_step150732800.pth", help="Path to .pth checkpoint file.")
+#parser.add_argument("--checkpoint", type=str, default="/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/cleanrl/runs/Openarm__ppo_openarm_lstm__1__1776147867/ppo_openarm_lstm_step488243200.pth", help="Path to .pth checkpoint file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments.")
 parser.add_argument("--num_steps", type=int, default=10000000, help="Steps to run per env.")
 parser.add_argument("--task", type=str, default="test_Openarm", help="Task name.")

@@ -312,8 +312,8 @@ class A2CBuilder(NetworkBuilder):
                             self.activations_factory.create(self.aux_out_activation)
                         )
 
-            self.img_height = 384
-            self.img_width = 480
+            self.img_height = 192
+            self.img_width = 240
             self.use_depth = False
             self.stereo_encoder = StereoEncoder(
                 backbone="resnet",

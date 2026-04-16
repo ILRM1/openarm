@@ -55,7 +55,6 @@ from rl_games.torch_runner import Runner
 from rl_games.algos_torch import model_builder
 
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.io import dump_pickle, dump_yaml
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg
@@ -107,21 +106,12 @@ def main(env_cfg, agent_cfg: dict):
     parent_path = str(pathlib.Path(__file__).parent.parent.parent.resolve())
     agent_cfg_folder = "dextrah_lab/tasks/dextrah_kuka_allegro/agents"
 
-    if ov_env.simulate_stereo:
-        student_cfg = os.path.join(
-            parent_path,
-            agent_cfg_folder,
-            # "rl_games_ppo_lstm_scratch_cnn_aux_stereo.yaml",
-            "rl_games_ppo_stereo_transformer.yaml"
-        )
-    else:
-        student_cfg = os.path.join(
-            parent_path,
-            agent_cfg_folder,
-            # "rl_games_mono_resnet.yaml"
-            "rl_games_ppo_mono_transformer.yaml"
-            # "rl_games_ppo_lstm_scratch_cnn_aux.yaml"
-        )
+    student_cfg = os.path.join(
+        parent_path,
+        agent_cfg_folder,
+        # "rl_games_ppo_lstm_scratch_cnn_aux_stereo.yaml",
+        "rl_games_ppo_stereo_transformer.yaml"
+    )
 
     teacher_cfg = os.path.join(
         parent_path,
@@ -129,9 +119,7 @@ def main(env_cfg, agent_cfg: dict):
         "rl_games_ppo_lstm_cfg.yaml"
     )
 
-    num_student_obs = ov_env.num_observations
-    num_teacher_obs = ov_env.num_teacher_observations
-    num_actions = ov_env.num_actions
+   
     student_ckpt = "pretrained_ckpts/student_1_flipped.pth"
     student_ckpt = os.path.join(
         parent_path,
@@ -141,14 +129,15 @@ def main(env_cfg, agent_cfg: dict):
     # student_ckpt = "/home/ritviks/workspace/git/dextrah_lab/dextrah_lab/distillation/runs/Dextrah-Kuka-Allegro_01-00-25-56/nn/dextrah_student_30000_iters.pth"
     # stereo rgb visdex
     # Determine teacher checkpoint path
-    teacher_ckpt = None
-    if not args_cli.play_policy:
-        if args_cli.teacher is not None:
-            teacher_ckpt = os.path.join(parent_path, "pretrained_ckpts", args_cli.teacher)
-        else:
-            teacher_ckpt = os.path.join(parent_path, "pretrained_ckpts/new_teacher.pth")
+    # teacher_ckpt = None
+    # if not args_cli.play_policy:
+    #     if args_cli.teacher is not None:
+    #         teacher_ckpt = os.path.join(parent_path, "pretrained_ckpts", args_cli.teacher)
+    #     else:
+    #         teacher_ckpt = os.path.join(parent_path, "pretrained_ckpts/new_teacher.pth")
     student_ckpt = None
     # student_ckpt = "/home/ritviks/workspace/git/distillation_results/new_obj_prims_seed_12.pth"
+    teacher_ckpt = args_cli.teacher
 
     if rank == 0:
         train_dir = "runs"

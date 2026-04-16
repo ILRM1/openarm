@@ -59,6 +59,19 @@ gym.register(
 )
 
 gym.register(
+    id="distl_openarm",
+    entry_point="dextrah_lab.tasks.openarm.distil_openarm_env:OpenarmEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "dextrah_lab.tasks.openarm.distil_openarm_env_cfg:OpenarmEnvCfg",
+        #"rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg.yaml",
+        "rl_games_cfg_entry_point": f"{openarm_agents.__name__}:rl_games_ppo_lstm_cfg.yaml",
+        # "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_lstm_scratch_cnn_aux.yaml",
+        #"rsl_rl_cfg_entry_point": agents.rsl_rl_ppo_cfg.ShadowHandPPORunnerCfg,
+    },
+)
+
+gym.register(
     id="Openarm_ik",
     entry_point="dextrah_lab.tasks.openarm.bimanual_reach_env:BimanualReachDirectEnv",
     disable_env_checker=True,

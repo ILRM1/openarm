@@ -129,16 +129,16 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     num_actions = 7
     success_timeout = 2.
     distillation = False
-    num_student_observations = 0
-    num_teacher_observations = 0
-    num_observations = 38
     num_states = 38
+    num_observations = 38
+    num_student_observations = 37
+    num_teacher_observations = num_observations
 
     state_space = 0
     observation_space = 0
     action_space = 0
 
-    action_scale = (0.02, 0.1, 0.044)
+    action_scale = (0.01, 0.06, 0.044)
     #action_scale = (0.04, 0.2, 0.044)
     
     asymmetric_obs = True
@@ -165,6 +165,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             gpu_max_rigid_patch_count=4 * 5 * 2**15
         ),
     )
+    
     # robot
     robot_cfg: ArticulationCfg = OPEN_ARM_HIGH_PD_CFG.replace(prim_path="/World/envs/env_.*/Robot").replace(
         init_state=ArticulationCfg.InitialStateCfg(
@@ -264,20 +265,16 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             rot=(1.0, 0.0, 0.0, 0.0)),
     )
     # distillation related parameters
-    img_width = 120  
-    img_height = 96
-    # img_width = 240  
-    # img_height = 192
+    img_width = 240
+    img_height = 192
     camera_rand_rot_range = 3
     camera_rand_pos_range = 0.03
 
     # head cam
     head_camera_pos = [0.03962, 0.0, 0.63629]
     head_camera_rot = [0.67799,0.20083,-0.20083,-0.67799]
-    head_img_width = 120      
-    head_img_height = 96
-    # head_img_width = 240  
-    # head_img_height = 192           
+    head_img_width = 240      
+    head_img_height = 192           
     fps = 30.0
 
     hfov = float(np.deg2rad(100.0))         # Horizontal field of view
@@ -313,7 +310,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         width=head_img_width,   
         height=head_img_height,   
-        data_types=[#"rgb",       
+        data_types=["rgb",       
                     "depth",],
         update_period=1.0 / fps,  
     )   
@@ -321,10 +318,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # wrist cam
     wrist_camera_pos = [0.04898, 0., 0.07218]
     wrist_camera_rot = [0.06165,0.7044,0.70443,0.06161]
-    wrist_img_width = 120      
-    wrist_img_height = 96     
-    # wrist_img_width = 240  
-    # wrist_img_height = 192         
+    wrist_img_width = 240      
+    wrist_img_height = 192           
     fps = 30.0
 
     hfov = float(np.deg2rad(100.0))         # Horizontal field of view
@@ -360,7 +355,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         width=wrist_img_width,   
         height=wrist_img_height,   
-        data_types=[#"rgb",       
+        data_types=["rgb",       
                     "depth",],
         update_period=1.0 / fps,  
     )
@@ -381,7 +376,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         width=wrist_img_width,   
         height=wrist_img_height,   
-        data_types=[#"rgb",       
+        data_types=["rgb",       
                     "depth",],
         update_period=1.0 / fps,  
     )
@@ -430,12 +425,12 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     x_center = 0.25
     x_width = 0.15
     y_center = 0.2
-    y_width = 0.15
+    y_width = 0.15 
 
     # DR Controls
     enable_adr = True
     num_adr_increments = 50
-    starting_adr_increments = 0 # 0 for no DR up to num_adr_increments for max DR 
+    starting_adr_increments = 50 # 0 for no DR up to num_adr_increments for max DR 
 
     # Default dof friction coefficients
     # NOTE: these are set based on how far out they will scale multiplicatively
@@ -477,9 +472,9 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     }
 
     # Object disturbance wrench fixed params
-    wrench_trigger_every = int(1. / (decimation * sim_dt)) # 1 sec
+    wrench_trigger_every = int(5 / (decimation * sim_dt)) # 1 sec
     torsional_radius = 0.01 # m
-    hand_to_object_dist_threshold = .3 # m
+    hand_to_object_dist_threshold = .2 # m
     #wrench_prob_per_rollout = 0. # NOTE: currently not used
 
     # Object scaling
@@ -583,6 +578,6 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     disable_out_of_reach_done = False
     disable_dome_light_randomization = False
     disable_arm_randomization = False
-
+    simulate_stereo = True
     # Enable depth image for teacher RL training (end-to-end vision-based RL)
     use_depth_teacher = False

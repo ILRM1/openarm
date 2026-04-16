@@ -156,8 +156,8 @@ class Agent(nn.Module):
         self.head_cnn, self.head_lns, self.head_pool = self._make_cnn()
         self.wrist_cnn, self.wrist_lns, self.wrist_pool = self._make_cnn()
 
-        self.head_fc = nn.Linear(3072, 32)
-        self.wrist_fc = nn.Linear(3072, 32)
+        self.head_fc = nn.Linear(256, 32)
+        self.wrist_fc = nn.Linear(256, 32)
 
         self.lstm = nn.LSTM(32 + 32 + self.proprio_dim, 1024, num_layers=2)
         for name, param in self.lstm.named_parameters():
@@ -178,7 +178,7 @@ class Agent(nn.Module):
 
     def _make_cnn(self):
         convs = nn.ModuleList([
-            nn.Conv2d(1,  16, kernel_size=8, stride=2),
+            nn.Conv2d(1,  16, kernel_size=8, stride=4),
             nn.Conv2d(16, 32, kernel_size=4, stride=2),
             nn.Conv2d(32, 64, kernel_size=3, stride=2),
             nn.Conv2d(64, 128, kernel_size=3, stride=2),
@@ -270,8 +270,8 @@ class Agent(nn.Module):
 #         self.head_cnn, self.head_lns, self.head_pool = self._make_cnn()
 #         self.wrist_cnn, self.wrist_lns, self.wrist_pool = self._make_cnn()
 
-#         self.head_fc = nn.Linear(256, 32)
-#         self.wrist_fc = nn.Linear(256, 32)
+#         self.head_fc = nn.Linear(3072, 32)
+#         self.wrist_fc = nn.Linear(3072, 32)
 
 #         self.lstm = nn.LSTM(32 + 32 + self.proprio_dim, 1024, num_layers=2)
 #         for name, param in self.lstm.named_parameters():
@@ -292,7 +292,7 @@ class Agent(nn.Module):
 
 #     def _make_cnn(self):
 #         convs = nn.ModuleList([
-#             nn.Conv2d(1,  16, kernel_size=8, stride=4),
+#             nn.Conv2d(1,  16, kernel_size=8, stride=2),
 #             nn.Conv2d(16, 32, kernel_size=4, stride=2),
 #             nn.Conv2d(32, 64, kernel_size=3, stride=2),
 #             nn.Conv2d(64, 128, kernel_size=3, stride=2),
@@ -372,7 +372,6 @@ class Agent(nn.Module):
 #         action = probs.sample()
 
 #         return action, action_mean, action_std, lstm_state
-    
 
 args = tyro.cli(Args)
 
