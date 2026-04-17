@@ -129,15 +129,16 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     num_actions = 7
     success_timeout = 2.
     distillation = False
-    num_student_observations = 0
-    num_teacher_observations = 0
-    num_observations = 38
     num_states = 38
+    num_observations = 38
+    num_student_observations = 38
+    num_teacher_observations = num_observations
 
     state_space = 0
     observation_space = 0
     action_space = 0
 
+    #action_scale = (0.01, 0.06, 0.044)
     action_scale = (0.02, 0.1, 0.044)
     #action_scale = (0.04, 0.2, 0.044)
     
@@ -171,7 +172,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             pos=(0.0, 0.0, 0.0),
             rot=(1.0, 0.0, 0.0, 0.0),
             joint_pos={
-                    "openarm_left_joint1": 0.63,
+                    "openarm_left_joint1": 0.9,
                     "openarm_left_joint2": -0.35,
                     "openarm_left_joint3": -0.24,
                     "openarm_left_joint4": 2.0,
@@ -179,7 +180,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
                     "openarm_left_joint6": 0.,
                     "openarm_left_joint7": 1.1,
 
-                    "openarm_right_joint1": -0.63,
+                    "openarm_right_joint1": -0.9,
                     "openarm_right_joint2": 0.35,
                     "openarm_right_joint3": 0.24,
                     "openarm_right_joint4": 2.0,
@@ -264,26 +265,26 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             rot=(1.0, 0.0, 0.0, 0.0)),
     )
     # distillation related parameters
-    img_width = 120  
-    img_height = 96
-    # img_width = 240  
-    # img_height = 192
+    # img_width = 120  
+    # img_height = 96
+    img_width = 240  
+    img_height = 192
     camera_rand_rot_range = 3
     camera_rand_pos_range = 0.03
 
     # head cam
-    head_camera_pos = [0.03962, 0.0, 0.63629]
-    head_camera_rot = [0.67799,0.20083,-0.20083,-0.67799]
-    head_img_width = 120      
-    head_img_height = 96
+    head_camera_pos = [0.09, 0.0, 0.52]
+    head_camera_rot = [0.67799, 0.20083, -0.20083, -0.67799]
+    head_img_width = img_width     
+    head_img_height = img_height
     # head_img_width = 240  
     # head_img_height = 192           
     fps = 30.0
 
-    hfov = float(np.deg2rad(100.0))         # Horizontal field of view
-    vfov = float(np.deg2rad(78.0))          # Vertical field of view
-    efl_mm = 3.43          # Effective focal length
-    max_distortion = -0.463         # -3% barrel (negligible → pinhole is accurate)
+    hfov = float(np.deg2rad(120.0))         # Horizontal field of view
+    vfov = float(np.deg2rad(93.0))          # Vertical field of view
+    efl_mm = 2.9144          # Effective focal length
+    max_distortion = -0.793         # -3% barrel (negligible → pinhole is accurate)
 
     FX = float((head_img_width  / 2.0) / np.tan(hfov / 2.0))
     FY = float((head_img_height / 2.0) / np.tan(vfov / 2.0))
@@ -308,7 +309,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 2.),   
+            clipping_range=(0.01, 1.),   
             projection_type="pinhole",
         ),
         width=head_img_width,   
@@ -319,10 +320,10 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     )   
 
     # wrist cam
-    wrist_camera_pos = [0.04898, 0., 0.07218]
-    wrist_camera_rot = [0.06165,0.7044,0.70443,0.06161]
-    wrist_img_width = 120      
-    wrist_img_height = 96     
+    wrist_camera_pos = [0.1, 0., 0.1201]
+    wrist_camera_rot = [0.29323, 0.64344, 0.64344, 0.29323]
+    wrist_img_width = img_width      
+    wrist_img_height = img_height   
     # wrist_img_width = 240  
     # wrist_img_height = 192         
     fps = 30.0
@@ -355,7 +356,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 2.),   
+            clipping_range=(0.01, 1.),   
             projection_type="pinhole",
         ),
         width=wrist_img_width,   
@@ -376,7 +377,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 2.),   
+            clipping_range=(0.01, 1.),   
             projection_type="pinhole",
         ),
         width=wrist_img_width,   
@@ -477,7 +478,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     }
 
     # Object disturbance wrench fixed params
-    wrench_trigger_every = int(1.5 / (decimation * sim_dt)) # 1 sec
+    wrench_trigger_every = int(1. / (decimation * sim_dt)) # 1 sec
     torsional_radius = 0.01 # m
     hand_to_object_dist_threshold = 0.1 # m
     #wrench_prob_per_rollout = 0. # NOTE: currently not used
@@ -583,6 +584,6 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     disable_out_of_reach_done = False
     disable_dome_light_randomization = False
     disable_arm_randomization = False
-
+    simulate_stereo = True
     # Enable depth image for teacher RL training (end-to-end vision-based RL)
     use_depth_teacher = False

@@ -104,8 +104,8 @@ class OpenarmEnv(DirectRLEnv):
         self.object_goal = torch.tensor([0.25, 0.15, 0.29], device=self.device).repeat((self.num_envs, 1))
        
         # Nominal reset states for the robot
-        self.robot_start_joint_pos =torch.tensor([0.63, -0.35,  -0.24,  2.0, -0.54, 0.0, 1.1,
-                                                  -0.63, 0.35,  0.24,  2.0, 0.54, 0.0, -1.1, 0.044, 0.044], device=self.device)
+        self.robot_start_joint_pos =torch.tensor([0.9, -0.35,  -0.24,  2.0, -0.54, 0.0, 1.1,
+                                                  -0.9, 0.35,  0.24,  2.0, 0.54, 0.0, -1.1, 0.044, 0.044], device=self.device)
         # self.robot_start_joint_pos =torch.tensor([0.94, -0.48,  0.078,  2.03, -0.22, 0.0, 0.08,
         #                                           -0.94, 0.48,  -0.078,  2.03, 0.22, 0.0, -0.08, 0.044, 0.044], device=self.device)
         self.robot_start_joint_pos = self.robot_start_joint_pos.repeat(self.num_envs, 1).contiguous()
@@ -230,7 +230,6 @@ class OpenarmEnv(DirectRLEnv):
         if self.cfg.objects_dir not in self.cfg.valid_objects_dir:
             raise ValueError(f"Need to specify valid directory of objects for training: {self.cfg.valid_objects_dir}")
 
-        self.cfg.num_student_observations = 159
         if self.cfg.distillation:
             self.cfg.num_observations = self.cfg.num_student_observations
 
@@ -251,7 +250,6 @@ class OpenarmEnv(DirectRLEnv):
         # TODO: add goal objects?
         self.robot = Articulation(self.cfg.robot_cfg)
         self.table = RigidObject(self.cfg.table_cfg)
-        self.object = RigidObject(self.cfg.object_cfg)
         # add ground plane
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         # clone and replicate (no need to filter for this environment)
@@ -260,7 +258,6 @@ class OpenarmEnv(DirectRLEnv):
         # add articultion to scene - we must register to scene to randomize with EventManager
         self.scene.articulations["robot"] = self.robot
         self.scene.rigid_objects["table"] = self.table
-        self.scene.rigid_objects["object"] = self.object
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=1000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
@@ -280,7 +277,12 @@ class OpenarmEnv(DirectRLEnv):
 
         # Create the objects for grasping
         # self._setup_metropolis_objects()
-        #self._setup_objects()
+        if self.cfg.distillation:
+            self._setup_objects()
+        else:
+            self.object = RigidObject(self.cfg.object_cfg)
+            self.scene.rigid_objects["object"] = self.object
+
         if self.cfg.distillation:
             import omni.replicator.core as rep
             rep.settings.set_render_rtx_realtime(antialiasing="DLAA")
@@ -450,12 +452,7 @@ class OpenarmEnv(DirectRLEnv):
             arm_shader_prims = list()
             arm_shader_prims.append(
                 stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_0_009/mat_0_009"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_2_006/mat_2_006"
+                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_3_001/mat_3_001"
                 )
             )
             arm_shader_prims.append(
@@ -463,31 +460,45 @@ class OpenarmEnv(DirectRLEnv):
                     "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_3_002/mat_3_002"
                 )
             )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_1_009/mat_1_009"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_5/mat_5"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_4/mat_4"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_0/mat_0"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_3_001/mat_3_001"
-                )
-            )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_0_009/mat_0_009"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_2_006/mat_2_006"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_1_009/mat_1_009"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_5/mat_5"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_4/mat_4"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_0/mat_0"
+            #     )
+            # )
+
+            for path in arm_shader_prims:
+                shader = UsdShade.Shader(path)
+                diffuse_tint_input = shader.CreateInput("diffuse_tint",Sdf.ValueTypeNames.Color3f)
+                roughness_input = shader.CreateInput("reflection_roughness_constant",Sdf.ValueTypeNames.Float)
+                metallic_input = shader.CreateInput("metallic_constant",Sdf.ValueTypeNames.Float)
+                specular_input = shader.CreateInput("specular_level",Sdf.ValueTypeNames.Float)
+
+                #roughness_input.Set(float(np.random.uniform(0.3, 0.9)))
 
             self.arm_mat_prims.append(arm_shader_prims)
         # Now create one more RigidObject with regex on existing object prims
@@ -1086,7 +1097,25 @@ class OpenarmEnv(DirectRLEnv):
                     for idx, arm_shader_prim in enumerate(self.arm_mat_prims):
                         if idx not in env_ids:
                             continue
+
                         for arm_shader in arm_shader_prim:
+                            if arm_shader.GetName() == "mat_3_001":
+                                arm_shader.GetAttribute("inputs:diffuse_tint").Set(
+                                    Gf.Vec3d(
+                                        np.random.uniform(0.8, 1.),
+                                        np.random.uniform(0.8, 1.),
+                                        np.random.uniform(0.8, 1.)
+                                    )
+                                )
+                            elif arm_shader.GetName() == "mat_3_002":
+                                arm_shader.GetAttribute("inputs:diffuse_tint").Set(
+                                    Gf.Vec3d(
+                                        np.random.uniform(0.0, 0.02),
+                                        np.random.uniform(0.0, 0.02),
+                                        np.random.uniform(0.0, 0.02)
+                                    )
+                                )
+
                             arm_shader.GetAttribute("inputs:reflection_roughness_constant").Set(
                                 np.random.uniform(0.2, 1.)
                             )
@@ -1096,6 +1125,7 @@ class OpenarmEnv(DirectRLEnv):
                             arm_shader.GetAttribute("inputs:specular_level").Set(
                                 np.random.uniform(0., 1.)
                             )
+
                     for i in np_env_ids:
                         shader_path = f"/World/envs/env_{i}/table/Looks/OmniPBR/Shader"
                         shader_prim = self.stage.GetPrimAtPath(shader_path)
@@ -1248,12 +1278,11 @@ class OpenarmEnv(DirectRLEnv):
                 self.robot_dof_pos_noisy, 
                 self.robot_dof_vel_noisy,
                 self.left_gripper_joint_pos.unsqueeze(-1),
-                self.left_tcp_pose,
+                self.left_tcp_pose[:, :3], 
+                self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], 
                 self.left_tcp_vel,
-                # object goal
-                self.object_goal, # 76:79
-                # last action
-                self.actions, # 79:90
+                self.object_goal, 
+                self.actions, 
             ),
             dim=-1,
         )
@@ -1271,20 +1300,8 @@ class OpenarmEnv(DirectRLEnv):
                 self.left_tcp_pose[:, :3], 
                 self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], #7
                 self.left_tcp_vel, 
-                # self.object_pos, #3
-                # self.object_rot, #4
-                # self.object_vel, #6
-                #self.left_tcp_pose[:,:3] - self.object_pos,
-                #self.hand_to_object_pos_error.unsqueeze(-1),
-                # object goal
                 self.object_goal, #3
-                # one-hot encoding of object ID
-                #self.multi_object_idx_onehot,
-                # object scales
                 #self.object_scale,
-                # last action
-                # self.tcp_twist_targets,
-                # self.left_gripper_action.unsqueeze(-1),
                 self.actions,
             ),
             dim=-1,
@@ -1303,21 +1320,8 @@ class OpenarmEnv(DirectRLEnv):
                 self.left_tcp_pose[:, :3], 
                 self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], #7
                 self.left_tcp_vel, #6
-                # object
-                # self.object_pos, #3
-                # self.object_rot, #4
-                # self.object_vel, #6
-                #self.left_tcp_pose[:,:3] - self.object_pos,
-                #self.hand_to_object_pos_error.unsqueeze(-1),
-                # object goal
                 self.object_goal, #3
-                # one-hot encoding of object ID
-                #self.multi_object_idx_onehot,
-                # object scale
                 #self.object_scale,
-                # last action
-                # self.tcp_twist_targets,
-                # self.left_gripper_action.unsqueeze(-1),
                 self.actions,
                 # dr values for robot
                 # TODO: should scale dof stiffness and damping if you want them.

@@ -749,7 +749,7 @@ class OpenarmEnv(DirectRLEnv):
             time_out = self.episode_length_buf >= self.max_episode_length - 1
            
         #return out_of_reach, time_out
-        return self.object_pos[:,2] > 0.28, time_out
+        return teriminated, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:

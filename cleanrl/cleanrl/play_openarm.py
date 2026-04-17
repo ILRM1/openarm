@@ -15,10 +15,13 @@ from torch.utils.tensorboard import SummaryWriter
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Run trained OpenArm LSTM policy.")
-parser.add_argument("--checkpoint", type=str, default="/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/cleanrl/runs/ppo_openarm_lstm_step150732800.pth", help="Path to .pth checkpoint file.")
-#parser.add_argument("--checkpoint", type=str, default="/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/cleanrl/runs/Openarm__ppo_openarm_lstm__1__1776147867/ppo_openarm_lstm_step488243200.pth", help="Path to .pth checkpoint file.")
+parser.add_argument("--checkpoint", type=str, 
+#5080 /home/namyeong/openarm/dextrah_lab/cleanrl/runs/ppo_openarm_lstm_step478412800.pth
+#train /home/namyeong/openarm/dextrah_lab/cleanrl/runs/Openarm__ppo_openarm_lstm__1__1776261499/ppo_openarm_lstm_step478412800.pth
+default="/home/namyeong/openarm/dextrah_lab/cleanrl/runs/ppo_openarm_lstm_step478412800.pth", 
+help="Path to .pth checkpoint file.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments.")
-parser.add_argument("--num_steps", type=int, default=10000000, help="Steps to run per env.")
+parser.add_argument("--num_steps", type=int, default=1000000, help="Steps to run per env.")
 parser.add_argument("--task", type=str, default="test_Openarm", help="Task name.")
 parser.add_argument("--deterministic", action="store_true", default=False, help="Use mean action (no sampling).")
 parser.add_argument("--video", action="store_true", default=False)
@@ -215,7 +218,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     episode_rewards = torch.zeros(args_cli.num_envs, device=device)
     episode_count = 0
     total_reward = 0.0
-
+    success=0.
+    sim_time=0.
+    finish=0.
+    time_list=[]
     print(f"[INFO] Running {args_cli.num_steps} steps ...")
     for _ in range(args_cli.num_steps):
         with torch.no_grad():
@@ -229,8 +235,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         done = torch.tensor((terminations | truncations), dtype=torch.float32, device=device)
         reward = torch.tensor(reward, dtype=torch.float32, device=device)
 
+        sim_time+=1.
+        if terminations[0] == True:
+            success+=1
+            time_list.append(sim_time)
+            sim_time=0.
+
         episode_rewards += reward
 
+        if done[0]==1:
+            finish+=1
+            if finish == 50:
+                break
+        
         # finished = done.bool()
         # if finished.any():
         #     mean_ep_r = episode_rewards[finished].mean().item()
@@ -240,6 +257,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         #     print(f"[step {step:6d}] episode_reward={mean_ep_r:.3f}")
         #     episode_rewards[finished] = 0.0
 
+    print("success:", success)
+    print("avg time: %0.1f" % (np.array(time_list).mean()/60))
     # if episode_count > 0:
     #     print(f"\n[DONE] Episodes: {episode_count}  |  Mean reward: {total_reward / episode_count:.3f}")
     # else:
