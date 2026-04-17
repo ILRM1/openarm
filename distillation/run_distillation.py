@@ -1,5 +1,19 @@
 """Script to perform student-teacher distillation"""
 
+"""
+RUN
+
+ LIVESTREAM=2 ENABLE_CAMERAS=1 python run_distillation.py \
+            --headless \
+            --task=Openarm \
+            --num_envs 256 env.distillation=True \
+            --enable_cameras env.simulate_stereo=True \
+            --teacher /home/namyeong/openarm/dextrah_lab/cleanrl/runs/Openarm__ppo_openarm_lstm__1__1776261499/ppo_openarm_lstm_step163840000.pth  \
+            env.img_aug_type="rgb" \
+            env.aux_coeff=10.
+
+"""
+
 import argparse
 import sys
 
@@ -147,7 +161,7 @@ def main(env_cfg, agent_cfg: dict):
     if rank == 0:
         train_dir = "runs"
         experiment_name = (
-            "Dextrah-Kuka-Allegro"
+            args_cli.task
             + datetime.now().strftime("_%d-%H-%M-%S")
         )
         experiment_dir = os.path.join(train_dir, experiment_name)

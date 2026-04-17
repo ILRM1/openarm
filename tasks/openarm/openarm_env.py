@@ -621,6 +621,7 @@ class OpenarmEnv(DirectRLEnv):
             #     head_depth, size=(int(self.cfg.head_img_height/2), int(self.cfg.head_img_width/2)),
             #     mode='bilinear', align_corners=False,
             # )
+
             head_depth_flat = head_depth.reshape(head_depth.shape[0], -1)  # (N, 19200)
 
             wrist_L_depth = self.wrist_L_cam.data.output["depth"].clone()

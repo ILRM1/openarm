@@ -306,7 +306,7 @@ class PolicyEvaluator:
             "obs": obs[self.config["student"]["obs_type"]],
             "prev_actions": self.prev_actions,
         }
-        
+    
         # Add image observations if they exist
         if "img" in obs:
             batch_dict["img"] = obs["img"]
