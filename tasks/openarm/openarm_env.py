@@ -654,7 +654,6 @@ class OpenarmEnv(DirectRLEnv):
             lift_reward
         ) = compute_rewards(
                 self.object_pos,
-                self.obj_height_gap,
                 self.left_gripper_action,
                 self.reset_buf,
                 self.in_success_region,
@@ -1151,7 +1150,6 @@ class OpenarmEnv(DirectRLEnv):
 
         self.tcp_twist_targets = torch.zeros(self.num_envs, 6, device=self.device)
         self.left_gripper_action = torch.ones(self.num_envs, device=self.device)
-        self.pre_obj_pos = self.object_pos.clone()
 
     def _compute_intermediate_values(self):
         # Data from robot--------------------------
@@ -1207,9 +1205,6 @@ class OpenarmEnv(DirectRLEnv):
         # Data from objects------------------------
         # Object translational position, 3D
         self.object_pos = self.object.data.root_pos_w - self.scene.env_origins
-     
-        self.obj_height_gap = self.object_pos[:, 2] - self.pre_obj_pos[:, 2]
-        self.pre_obj_pos = self.object_pos.clone()
 
         # NOTE: noise on object pos and rot is per-step sampled uniform noise and sustained
         # bias noise sampled only at start of rollout
@@ -1422,7 +1417,6 @@ class OpenarmEnv(DirectRLEnv):
 @torch.jit.script
 def compute_rewards(
     object_pos,
-    obj_height_gap,
     gripper_action,
     reset_buf: torch.Tensor,
     in_success_region: torch.Tensor,

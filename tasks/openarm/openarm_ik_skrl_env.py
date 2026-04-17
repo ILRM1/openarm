@@ -36,7 +36,7 @@ from isaacsim.core.utils.prims import set_prim_attribute_value
 from isaaclab.controllers import DifferentialIKController, DifferentialIKControllerCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_euler_xyz, euler_xyz_from_quat
-from isaaclab_tasks.utils import load_cfg_from_registry
+
 import torch.nn as nn
 from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
 from skrl.models.torch import GaussianMixin, DeterministicMixin, Model
@@ -118,7 +118,7 @@ class OpenarmEnv(DirectRLEnv):
         self.ik_agent.load("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/cleanrl/runs/best_agent.pt")
         self.ik_agent.set_running_mode("eval")
         self.ik_actions = torch.zeros((self.num_envs, 7), device=self.device)
-        self.left_target_pose = torch.zeros((self.num_envs, 7), device=self.device)        
+        self.left_target_pose = torch.zeros((self.num_envs, 7), device=self.device)       
 
         self.num_robot_dofs = self.robot.num_joints
         self.action_scale = self.cfg.action_scale
@@ -154,11 +154,11 @@ class OpenarmEnv(DirectRLEnv):
 
         # Setting the target position for the object
         # TODO: need to make these goals dynamic, sampled at the start of the rollout
-        self.object_goal = torch.tensor([0.25, 0.15, 0.3], device=self.device).repeat((self.num_envs, 1))
+        self.object_goal = torch.tensor([0.25, 0.15, 0.29], device=self.device).repeat((self.num_envs, 1))
        
         # Nominal reset states for the robot
-        self.robot_start_joint_pos =torch.tensor([0.63, -0.35,  -0.24,  2.0, -0.54, 0.0, 1.1,
-                                                  -0.63, 0.35,  0.24,  2.0, 0.54, 0.0, -1.1, 0.044, 0.044], device=self.device)
+        self.robot_start_joint_pos =torch.tensor([0.9, -0.35,  -0.24,  2.0, -0.54, 0.0, 1.1,
+                                                  -0.9, 0.35,  0.24,  2.0, 0.54, 0.0, -1.1, 0.044, 0.044], device=self.device)
         # self.robot_start_joint_pos =torch.tensor([0.94, -0.48,  0.078,  2.03, -0.22, 0.0, 0.08,
         #                                           -0.94, 0.48,  -0.078,  2.03, 0.22, 0.0, -0.08, 0.044, 0.044], device=self.device)
         self.robot_start_joint_pos = self.robot_start_joint_pos.repeat(self.num_envs, 1).contiguous()
@@ -283,7 +283,6 @@ class OpenarmEnv(DirectRLEnv):
         if self.cfg.objects_dir not in self.cfg.valid_objects_dir:
             raise ValueError(f"Need to specify valid directory of objects for training: {self.cfg.valid_objects_dir}")
 
-        self.cfg.num_student_observations = 159
         if self.cfg.distillation:
             self.cfg.num_observations = self.cfg.num_student_observations
 
@@ -304,7 +303,6 @@ class OpenarmEnv(DirectRLEnv):
         # TODO: add goal objects?
         self.robot = Articulation(self.cfg.robot_cfg)
         self.table = RigidObject(self.cfg.table_cfg)
-        self.object = RigidObject(self.cfg.object_cfg)
         # add ground plane
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         # clone and replicate (no need to filter for this environment)
@@ -313,7 +311,6 @@ class OpenarmEnv(DirectRLEnv):
         # add articultion to scene - we must register to scene to randomize with EventManager
         self.scene.articulations["robot"] = self.robot
         self.scene.rigid_objects["table"] = self.table
-        self.scene.rigid_objects["object"] = self.object
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=1000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
@@ -333,7 +330,12 @@ class OpenarmEnv(DirectRLEnv):
 
         # Create the objects for grasping
         # self._setup_metropolis_objects()
-        #self._setup_objects()
+        if self.cfg.distillation:
+            self._setup_objects()
+        else:
+            self.object = RigidObject(self.cfg.object_cfg)
+            self.scene.rigid_objects["object"] = self.object
+
         if self.cfg.distillation:
             import omni.replicator.core as rep
             rep.settings.set_render_rtx_realtime(antialiasing="DLAA")
@@ -503,12 +505,7 @@ class OpenarmEnv(DirectRLEnv):
             arm_shader_prims = list()
             arm_shader_prims.append(
                 stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_0_009/mat_0_009"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_2_006/mat_2_006"
+                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_3_001/mat_3_001"
                 )
             )
             arm_shader_prims.append(
@@ -516,31 +513,45 @@ class OpenarmEnv(DirectRLEnv):
                     "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_3_002/mat_3_002"
                 )
             )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_1_009/mat_1_009"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_5/mat_5"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_4/mat_4"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_0/mat_0"
-                )
-            )
-            arm_shader_prims.append(
-                stage.GetPrimAtPath(
-                    "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_3_001/mat_3_001"
-                )
-            )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_0_009/mat_0_009"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_2_006/mat_2_006"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_1_009/mat_1_009"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_5/mat_5"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_4/mat_4"
+            #     )
+            # )
+            # arm_shader_prims.append(
+            #     stage.GetPrimAtPath(
+            #         "/World/envs/" + "env_" + str(i) + "/Robot/Looks/mat_0/mat_0"
+            #     )
+            # )
+
+            for path in arm_shader_prims:
+                shader = UsdShade.Shader(path)
+                diffuse_tint_input = shader.CreateInput("diffuse_tint",Sdf.ValueTypeNames.Color3f)
+                roughness_input = shader.CreateInput("reflection_roughness_constant",Sdf.ValueTypeNames.Float)
+                metallic_input = shader.CreateInput("metallic_constant",Sdf.ValueTypeNames.Float)
+                specular_input = shader.CreateInput("specular_level",Sdf.ValueTypeNames.Float)
+
+                #roughness_input.Set(float(np.random.uniform(0.3, 0.9)))
 
             self.arm_mat_prims.append(arm_shader_prims)
         # Now create one more RigidObject with regex on existing object prims
@@ -581,6 +592,9 @@ class OpenarmEnv(DirectRLEnv):
         left_target_ori = self.left_tcp_pose[:,3:6] + self.tcp_twist_targets[:,3:6]
 
         left_target_quat = quat_from_euler_xyz(left_target_ori[:, 0], left_target_ori[:, 1], left_target_ori[:, 2])
+        # left_angle = torch.norm(left_target_ori, dim=-1, keepdim=False)
+        # left_axis = left_target_ori / (left_angle.unsqueeze(-1) + 1e-8)
+        # left_target_quat = quat_from_angle_axis(left_angle, left_axis)
         self.left_target_pose = torch.cat((left_target_pos, left_target_quat), dim=-1).to(dtype=self.left_tcp_pose.dtype)
 
         with torch.inference_mode():
@@ -656,10 +670,10 @@ class OpenarmEnv(DirectRLEnv):
             head_depth[head_depth > self.cfg.d_max] = 0.
             head_depth[head_depth < self.cfg.d_min] = 0.
             head_depth = head_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
-            head_depth = F.interpolate(
-                head_depth, size=(int(self.cfg.head_img_height/2), int(self.cfg.head_img_width/2)),
-                mode='bilinear', align_corners=False,
-            )
+            # head_depth = F.interpolate(
+            #     head_depth, size=(int(self.cfg.head_img_height/2), int(self.cfg.head_img_width/2)),
+            #     mode='bilinear', align_corners=False,
+            # )
             head_depth_flat = head_depth.reshape(head_depth.shape[0], -1)  # (N, 19200)
 
             wrist_L_depth = self.wrist_L_cam.data.output["depth"].clone()
@@ -667,10 +681,10 @@ class OpenarmEnv(DirectRLEnv):
             wrist_L_depth[wrist_L_depth > self.cfg.d_max] = 0.
             wrist_L_depth[wrist_L_depth < self.cfg.d_min] = 0.
             wrist_L_depth = wrist_L_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
-            wrist_L_depth = F.interpolate(
-                wrist_L_depth, size=(int(self.cfg.wrist_img_height/2), int(self.cfg.wrist_img_width/2)),
-                mode='bilinear', align_corners=False,
-            )
+            # wrist_L_depth = F.interpolate(
+            #     wrist_L_depth, size=(int(self.cfg.wrist_img_height/2), int(self.cfg.wrist_img_width/2)),
+            #     mode='bilinear', align_corners=False,
+            # )
             wrist_L_depth_flat = wrist_L_depth.reshape(wrist_L_depth.shape[0], -1)  # (N, 19200)
 
             policy_with_depth = torch.cat([policy_obs, head_depth_flat, wrist_L_depth_flat], dim=-1)  # (N, 34+19200+19200=38434)
@@ -693,7 +707,6 @@ class OpenarmEnv(DirectRLEnv):
             lift_reward
         ) = compute_rewards(
                 self.object_pos,
-                self.obj_height_gap,
                 self.left_gripper_action,
                 self.reset_buf,
                 self.in_success_region,
@@ -855,7 +868,7 @@ class OpenarmEnv(DirectRLEnv):
         )
 
         self.object.write_root_state_to_sim(object_default_state, env_ids)
-     
+
         # Spawning robot
         joint_pos_noise = self.dextrah_adr.get_custom_param_value("robot_spawn" ,"joint_pos_noise")
         joint_vel_noise = self.dextrah_adr.get_custom_param_value("robot_spawn" ,"joint_vel_noise")
@@ -1136,7 +1149,25 @@ class OpenarmEnv(DirectRLEnv):
                     for idx, arm_shader_prim in enumerate(self.arm_mat_prims):
                         if idx not in env_ids:
                             continue
+
                         for arm_shader in arm_shader_prim:
+                            if arm_shader.GetName() == "mat_3_001":
+                                arm_shader.GetAttribute("inputs:diffuse_tint").Set(
+                                    Gf.Vec3d(
+                                        np.random.uniform(0.8, 1.),
+                                        np.random.uniform(0.8, 1.),
+                                        np.random.uniform(0.8, 1.)
+                                    )
+                                )
+                            elif arm_shader.GetName() == "mat_3_002":
+                                arm_shader.GetAttribute("inputs:diffuse_tint").Set(
+                                    Gf.Vec3d(
+                                        np.random.uniform(0.0, 0.02),
+                                        np.random.uniform(0.0, 0.02),
+                                        np.random.uniform(0.0, 0.02)
+                                    )
+                                )
+
                             arm_shader.GetAttribute("inputs:reflection_roughness_constant").Set(
                                 np.random.uniform(0.2, 1.)
                             )
@@ -1146,6 +1177,7 @@ class OpenarmEnv(DirectRLEnv):
                             arm_shader.GetAttribute("inputs:specular_level").Set(
                                 np.random.uniform(0., 1.)
                             )
+
                     for i in np_env_ids:
                         shader_path = f"/World/envs/env_{i}/table/Looks/OmniPBR/Shader"
                         shader_prim = self.stage.GetPrimAtPath(shader_path)
@@ -1171,8 +1203,6 @@ class OpenarmEnv(DirectRLEnv):
 
         self.tcp_twist_targets = torch.zeros(self.num_envs, 6, device=self.device)
         self.left_gripper_action = torch.ones(self.num_envs, device=self.device)
-        self.pre_obj_pos = self.object_pos.clone()
-
         self.ik_actions = torch.zeros((self.num_envs, 7), device=self.device)
         self.left_target_pose =self.robot.data.body_pose_w[:, self.left_tcp_id] 
 
@@ -1230,9 +1260,6 @@ class OpenarmEnv(DirectRLEnv):
         # Data from objects------------------------
         # Object translational position, 3D
         self.object_pos = self.object.data.root_pos_w - self.scene.env_origins
-     
-        self.obj_height_gap = self.object_pos[:, 2] - self.pre_obj_pos[:, 2]
-        self.pre_obj_pos = self.object_pos.clone()
 
         # NOTE: noise on object pos and rot is per-step sampled uniform noise and sustained
         # bias noise sampled only at start of rollout
@@ -1301,12 +1328,11 @@ class OpenarmEnv(DirectRLEnv):
                 self.robot_dof_pos_noisy, 
                 self.robot_dof_vel_noisy,
                 self.left_gripper_joint_pos.unsqueeze(-1),
-                self.left_tcp_pose,
+                self.left_tcp_pose[:, :3], 
+                self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], 
                 self.left_tcp_vel,
-                # object goal
-                self.object_goal, # 76:79
-                # last action
-                self.actions, # 79:90
+                self.object_goal, 
+                self.actions, 
             ),
             dim=-1,
         )
@@ -1324,20 +1350,8 @@ class OpenarmEnv(DirectRLEnv):
                 self.left_tcp_pose[:, :3], 
                 self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], #7
                 self.left_tcp_vel, 
-                # self.object_pos, #3
-                # self.object_rot, #4
-                # self.object_vel, #6
-                #self.left_tcp_pose[:,:3] - self.object_pos,
-                #self.hand_to_object_pos_error.unsqueeze(-1),
-                # object goal
                 self.object_goal, #3
-                # one-hot encoding of object ID
-                #self.multi_object_idx_onehot,
-                # object scales
                 #self.object_scale,
-                # last action
-                # self.tcp_twist_targets,
-                # self.left_gripper_action.unsqueeze(-1),
                 self.actions,
             ),
             dim=-1,
@@ -1356,21 +1370,8 @@ class OpenarmEnv(DirectRLEnv):
                 self.left_tcp_pose[:, :3], 
                 self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], #7
                 self.left_tcp_vel, #6
-                # object
-                # self.object_pos, #3
-                # self.object_rot, #4
-                # self.object_vel, #6
-                #self.left_tcp_pose[:,:3] - self.object_pos,
-                #self.hand_to_object_pos_error.unsqueeze(-1),
-                # object goal
                 self.object_goal, #3
-                # one-hot encoding of object ID
-                #self.multi_object_idx_onehot,
-                # object scale
                 #self.object_scale,
-                # last action
-                # self.tcp_twist_targets,
-                # self.left_gripper_action.unsqueeze(-1),
                 self.actions,
                 # dr values for robot
                 # TODO: should scale dof stiffness and damping if you want them.
@@ -1387,7 +1388,7 @@ class OpenarmEnv(DirectRLEnv):
         )
 
         return obs
-
+    
     def ik_observations(self):
         obs = torch.cat(
             (
@@ -1485,7 +1486,6 @@ class OpenarmEnv(DirectRLEnv):
 @torch.jit.script
 def compute_rewards(
     object_pos,
-    obj_height_gap,
     gripper_action,
     reset_buf: torch.Tensor,
     in_success_region: torch.Tensor,
@@ -1503,12 +1503,12 @@ def compute_rewards(
     lift_sharpness: float
 ):
     # Reward for moving fingertip and palm points closer to object centroid point
-    hand_to_object_reward = 10. * torch.exp(-15. * hand_to_object_pos_error)
+    hand_to_object_reward = 20. * torch.exp(-20. * hand_to_object_pos_error)
     # Reward for moving the object to the goal translational position
     object_to_goal_reward = 0. * torch.exp(object_to_goal_sharpness * object_to_object_goal_pos_error)
     #object_to_goal_reward = torch.where(object_pos[:,2]>0.245, object_to_goal_reward, 0.)
     
-    close_gripper_reward = 20.*torch.where(hand_to_object_pos_error<=0.015, torch.exp(-3. * gripper_action), 0.)
+    close_gripper_reward = 25.*torch.where(hand_to_object_pos_error<=0.015, torch.exp(-3. * gripper_action), 0.)
     close_gripper_penalty = torch.exp(-15. * hand_to_object_pos_error)*torch.where(((hand_to_object_pos_error>0.015)) & (gripper_action<=0.5), -1., 0.)
    
     # Reward for lifting object off table and towards object goal

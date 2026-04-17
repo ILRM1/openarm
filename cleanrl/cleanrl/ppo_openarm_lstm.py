@@ -50,7 +50,7 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
 
     # Algorithm specific arguments
-    env_id: str = "Openarm"
+    task: str = "Openarm" # Openarm_ik_skrl
     """the id of the environment"""
     total_timesteps: int = 10000000000
     """total timesteps of the experiments"""
@@ -204,12 +204,12 @@ class Agent(nn.Module):
         
         proprio, head_depth, wrist_L_depth = _split_obs(x, self.img_h, self.img_w, self.proprio_dim)
 
-        import cv2
-        img = head_depth[0, 0].detach().cpu().numpy()
-        # normalize to 0~255
-        img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
-        img_uint8 = (img_norm * 255).astype("uint8")
-        cv2.imwrite("depth_debug.png", img_uint8)
+        # import cv2
+        # img = wrist_L_depth[0, 0].detach().cpu().numpy()
+        # # normalize to 0~255
+        # img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
+        # img_uint8 = (img_norm * 255).astype("uint8")
+        # cv2.imwrite("depth_debug.png", img_uint8)
 
         head_cnn_out = self._cnn_forward(head_depth, self.head_cnn, self.head_lns, self.head_pool, self.head_fc)
         wrist_cnn_out = self._cnn_forward(wrist_L_depth, self.wrist_cnn, self.wrist_lns, self.wrist_pool, self.wrist_fc)
@@ -264,7 +264,7 @@ args = tyro.cli(Args)
 parser = argparse.ArgumentParser()
 parser.add_argument("--num_envs", type=int, default=args.num_envs, help="Number of environments to simulate.")
 parser.add_argument("--num_steps", type=int, default=args.num_steps, help="Number of steps to run each environment.")
-parser.add_argument("--task", type=str, default=args.env_id, help="Name of the task.")
+parser.add_argument("--task", type=str, default=args.task, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=args.seed, help="Seed used for the environment")
 
 AppLauncher.add_app_launcher_args(parser)
@@ -295,7 +295,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     #args.num_iterations = args.total_timesteps // args.batch_size
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    run_name = f"{args_cli.task}__{args.exp_name}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
 
@@ -325,7 +325,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # env setup
     # envs = gym.vector.SyncVectorEnv(
-    #     [make_env(args.env_id, i, args.capture_video, run_name) for i in range(args.num_envs)],
+    #     [make_env(args.task, i, args.capture_video, run_name) for i in range(args.num_envs)],
     # )
     # assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs

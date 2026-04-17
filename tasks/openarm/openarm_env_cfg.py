@@ -265,10 +265,10 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             rot=(1.0, 0.0, 0.0, 0.0)),
     )
     # distillation related parameters
-    # img_width = 120  
-    # img_height = 96
-    img_width = 240  
-    img_height = 192
+    img_width = 120  
+    img_height = 96
+    # img_width = 240  
+    # img_height = 192
     camera_rand_rot_range = 3
     camera_rand_pos_range = 0.03
 
