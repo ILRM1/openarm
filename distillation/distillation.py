@@ -227,10 +227,16 @@ class Agent(nn.Module):
 
 
 class Dagger:
-    def __init__(self, env, config, summaries_dir, nn_dir):
-        self.world_size = int(os.environ['WORLD_SIZE'])  # Total number of processes
-        self.rank = int(os.environ['RANK'])  # Global rank of this process
-        self.local_rank = int(os.environ['LOCAL_RANK']) # local rank of the process 
+    def __init__(self, env, config, summaries_dir, nn_dir, distributed):
+        if distributed:
+            self.world_size = int(os.environ['WORLD_SIZE'])  # Total number of processes
+            self.rank = int(os.environ['RANK'])  # Global rank of this process
+            self.local_rank = int(os.environ['LOCAL_RANK']) # local rank of the process 
+        else:
+            self.world_size = int(os.environ.get('WORLD_SIZE', 1))
+            self.rank = int(os.environ.get('RANK', 0))
+            self.local_rank = int(os.environ.get('LOCAL_RANK', 0))
+
         torch.cuda.set_device(self.local_rank)
         wp.set_device(f"cuda:{self.local_rank}")
 
@@ -271,9 +277,12 @@ class Dagger:
         #     'normalize_input': self.normalize_input,
         # }
         self.student_model = self.student_network.build(self.student_model_config).to(self.device)
-        for param in self.student_model.parameters():
-            dist.broadcast(param.data, src=0)
-        self.student_model_ddp = DDP(self.student_model, device_ids=[self.local_rank], find_unused_parameters=True)
+        if distributed:
+            for param in self.student_model.parameters():
+                dist.broadcast(param.data, src=0)
+            self.student_model_ddp = DDP(self.student_model, device_ids=[self.local_rank], find_unused_parameters=True)
+        else:
+            self.student_model_ddp = self.student_model
         # In distillation mode, cfg.num_observations is overridden to student obs (159).
         # Teacher was trained with proprio only (cfg.num_states = 38), so build with a proxy.
        

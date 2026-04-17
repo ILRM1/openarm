@@ -78,10 +78,16 @@ from dextrah_lab.distillation.a2c_mono_transformer import A2CBuilder as A2CMonoT
 @hydra_task_config(args_cli.task, "rl_games_cfg_entry_point")
 def main(env_cfg, agent_cfg: dict):
     """ Performs distillation. """
-    world_size = int(os.environ['WORLD_SIZE'])  # Total number of processes
-    rank = int(os.environ['RANK'])  # Global rank of this process
-    local_rank = int(os.environ['LOCAL_RANK']) # local rank of the process 
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+
+    if args_cli.distributed:
+        world_size = int(os.environ['WORLD_SIZE'])  # Total number of processes
+        rank = int(os.environ['RANK'])  # Global rank of this process
+        local_rank = int(os.environ['LOCAL_RANK']) # local rank of the process 
+        dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    else:
+        world_size = int(os.environ.get('WORLD_SIZE', 1))
+        rank = int(os.environ.get('RANK', 0))
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
 
@@ -118,7 +124,6 @@ def main(env_cfg, agent_cfg: dict):
         agent_cfg_folder,
         "rl_games_ppo_lstm_cfg.yaml"
     )
-
    
     student_ckpt = "pretrained_ckpts/student_1_flipped.pth"
     student_ckpt = os.path.join(
@@ -181,7 +186,7 @@ def main(env_cfg, agent_cfg: dict):
     model_builder.register_network("a2c_mono_resnet", A2CMonoResnetBuilder)
     model_builder.register_network("a2c_mono_transformer", A2CMonoTransformerBuilder)
 
-    dagger = Dagger(env, dagger_config, summaries_dir=summaries_dir, nn_dir=nn_dir)
+    dagger = Dagger(env, dagger_config, summaries_dir=summaries_dir, nn_dir=nn_dir, distributed=args_cli.distributed)
     dagger.distill()
     if rank == 0:
         dagger.save("sh_dist_scratch_cnn")

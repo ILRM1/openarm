@@ -44,6 +44,13 @@ omni.cache/
 .idea/
 *.swp
 
+# 에셋 텍스처
+assets/curated_table_textures/
+assets/dome_light_textures/
+assets/object_textures/
+assets/background_imgs/
+textures.zip
+
 # 기타
 *.log
 *.tmp

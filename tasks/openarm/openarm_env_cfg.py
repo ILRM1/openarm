@@ -314,7 +314,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         width=head_img_width,   
         height=head_img_height,   
-        data_types=[#"rgb",       
+        data_types=["rgb",       
                     "depth",],
         update_period=1.0 / fps,  
     )   
@@ -361,7 +361,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         width=wrist_img_width,   
         height=wrist_img_height,   
-        data_types=[#"rgb",       
+        data_types=["rgb",       
                     "depth",],
         update_period=1.0 / fps,  
     )
@@ -382,7 +382,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         width=wrist_img_width,   
         height=wrist_img_height,   
-        data_types=[#"rgb",       
+        data_types=["rgb",       
                     "depth",],
         update_period=1.0 / fps,  
     )
