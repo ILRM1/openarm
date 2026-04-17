@@ -124,7 +124,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # env
     sim_dt = 1/120.
     decimation = 2 # 60 Hz
-    episode_length_s = 15. #10.0
+    episode_length_s = 10. #10.0
     num_sim_steps_to_render=4 # renders every 4 sim steps, so 60 Hz
     num_actions = 7
     success_timeout = 2.
@@ -477,9 +477,9 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     }
 
     # Object disturbance wrench fixed params
-    wrench_trigger_every = int(1. / (decimation * sim_dt)) # 1 sec
+    wrench_trigger_every = int(1.5 / (decimation * sim_dt)) # 1 sec
     torsional_radius = 0.01 # m
-    hand_to_object_dist_threshold = .3 # m
+    hand_to_object_dist_threshold = 0.1 # m
     #wrench_prob_per_rollout = 0. # NOTE: currently not used
 
     # Object scaling

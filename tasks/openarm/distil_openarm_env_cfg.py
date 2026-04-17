@@ -124,7 +124,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # env
     sim_dt = 1/120.
     decimation = 2 # 60 Hz
-    episode_length_s = 15. #10.0
+    episode_length_s = 10. #10.0
     num_sim_steps_to_render=4 # renders every 4 sim steps, so 60 Hz
     num_actions = 7
     success_timeout = 2.

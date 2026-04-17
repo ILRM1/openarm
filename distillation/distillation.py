@@ -116,7 +116,7 @@ class Agent(nn.Module):
         super().__init__()
 
         self.img_w, self.img_h = int(envs.cfg.head_img_width/2), int(envs.cfg.head_img_height/2)
-        self.proprio_dim = 38
+        self.proprio_dim = envs.cfg.num_teacher_observations
 
         # Separate CNNs for head and wrist
         self.head_cnn, self.head_lns, self.head_pool = self._make_cnn()

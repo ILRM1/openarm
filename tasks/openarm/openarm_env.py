@@ -101,7 +101,7 @@ class OpenarmEnv(DirectRLEnv):
 
         # Setting the target position for the object
         # TODO: need to make these goals dynamic, sampled at the start of the rollout
-        self.object_goal = torch.tensor([0.25, 0.15, 0.3], device=self.device).repeat((self.num_envs, 1))
+        self.object_goal = torch.tensor([0.25, 0.15, 0.29], device=self.device).repeat((self.num_envs, 1))
        
         # Nominal reset states for the robot
         self.robot_start_joint_pos =torch.tensor([0.63, -0.35,  -0.24,  2.0, -0.54, 0.0, 1.1,
@@ -1441,7 +1441,7 @@ def compute_rewards(
     object_to_goal_reward = 0. * torch.exp(object_to_goal_sharpness * object_to_object_goal_pos_error)
     #object_to_goal_reward = torch.where(object_pos[:,2]>0.245, object_to_goal_reward, 0.)
     
-    close_gripper_reward = 20.*torch.where(hand_to_object_pos_error<=0.015, torch.exp(-3. * gripper_action), 0.)
+    close_gripper_reward = 25.*torch.where(hand_to_object_pos_error<=0.015, torch.exp(-3. * gripper_action), 0.)
     close_gripper_penalty = torch.exp(-15. * hand_to_object_pos_error)*torch.where(((hand_to_object_pos_error>0.015)) & (gripper_action<=0.5), -1., 0.)
    
     # Reward for lifting object off table and towards object goal
