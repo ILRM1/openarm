@@ -34,6 +34,7 @@ import torch
 import yaml
 from scipy.spatial.transform import Rotation as R
 
+import message_filters
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
@@ -59,7 +60,7 @@ LEFT_ARM_JOINTS  = [f"openarm_left_joint{i}" for i in range(1, 8)]
 LEFT_GRIPPER_JOINT = "openarm_left_finger_joint1"
 LEFT_EE_FRAME    = "openarm_left_hand_tcp"
 
-NUM_PROPRIO  = 38   # student_policy_obs 차원
+NUM_PROPRIO  = 37   # student_policy_obs 차원
 NUM_ACTIONS  = 7    # 6 TCP twist + 1 gripper
 
 ACTION_SCALE_LINEAR  = 0.02   # m per step

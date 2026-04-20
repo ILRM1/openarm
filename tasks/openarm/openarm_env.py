@@ -161,6 +161,13 @@ class OpenarmEnv(DirectRLEnv):
         self.robot_joint_pos_noise_width = torch.zeros(self.num_envs, 1, device=self.device)
         self.robot_joint_vel_noise_width = torch.zeros(self.num_envs, 1, device=self.device)
 
+        self.left_tcp_pos_bias_width = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_ori_bias_width = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_pos_bias = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_ori_bias = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_pos_noise_width = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_ori_noise_width = torch.zeros(self.num_envs, 1, device=self.device)
+
         # markers
         self.pred_pos_markers = VisualizationMarkers(
             self.cfg.pred_pos_marker_cfg
@@ -935,6 +942,14 @@ class OpenarmEnv(DirectRLEnv):
             self.dextrah_adr.get_custom_param_value("robot_state_noise", "robot_joint_vel_noise") *\
             torch.rand(num_ids, device=self.device)
 
+
+        self.left_tcp_pos_bias_width[env_ids, 0] = 0.006 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_ori_bias_width[env_ids, 0] = 0.08 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_pos_bias[env_ids, 0] = self.left_tcp_pos_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
+        self.left_tcp_ori_bias[env_ids, 0] = self.left_tcp_ori_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
+        self.left_tcp_pos_noise_width[env_ids, 0] = 0.006 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_ori_noise_width[env_ids, 0] = 0.08 * torch.rand(num_ids, device=self.device)
+
 #        # Update whether to apply wrench for the episode
 #        self.apply_wrench = torch.where(
 #            torch.rand(self.num_envs, device=self.device) <= self.cfg.wrench_prob_per_rollout,
@@ -1156,6 +1171,9 @@ class OpenarmEnv(DirectRLEnv):
         # Data from robot--------------------------
         # Robot measured joint position and velocity
         self.left_gripper_joint_pos = self.robot.data.joint_pos[:, self.left_gripper_joint_id]
+        self.left_gripper_joint_pos_noisy = self.left_gripper_joint_pos + self.left_tcp_pos_noise_width[0][0]  *\
+         2. * (torch.rand_like(self.left_gripper_joint_pos) - 0.5) + self.left_tcp_pos_bias[0][0]
+       
         self.robot_dof_pos = self.robot.data.joint_pos[:, self.left_arm_joint_id]
         self.robot_dof_pos_noisy = self.robot_dof_pos +\
             self.robot_joint_pos_noise_width *\
@@ -1172,6 +1190,11 @@ class OpenarmEnv(DirectRLEnv):
             ,"coefficient"
         )
 
+        # self.left_tcp_pos_bias[env_ids, 0] = self.left_tcp_pos_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
+        # self.left_tcp_ori_bias[env_ids, 0] = self.left_tcp_ori_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
+        # self.left_tcp_pos_noise_width[env_ids, 0] = 0.006 * torch.rand(num_ids, device=self.device)
+        # self.left_tcp_ori_noise_width[env_ids, 0] = 0.08 * torch.rand(num_ids, device=self.device)
+
         self.left_tcp_vel = self.robot.data.body_link_vel_w[:, self.left_tcp_id]
         self.right_tcp_vel = self.robot.data.body_link_vel_w[:, self.right_tcp_id]
         
@@ -1179,13 +1202,17 @@ class OpenarmEnv(DirectRLEnv):
         self.right_tcp_pose = self.robot.data.body_pose_w[:, self.right_tcp_id]
         self.left_tcp_pose[:, :3] = self.left_tcp_pose[:, :3] - self.scene.env_origins
         self.right_tcp_pose[:, :3] = self.right_tcp_pose[:, :3] - self.scene.env_origins
-        
-        left_target_euler = torch.stack(euler_xyz_from_quat(self.left_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
-        #left_target_euler = axis_angle_from_quat(self.left_tcp_pose[:, 3:])
-        self.left_tcp_pose = torch.cat((self.left_tcp_pose[:, :3], left_target_euler), dim=-1)
 
-        right_target_euler = torch.stack(euler_xyz_from_quat(self.right_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
-        self.right_tcp_pose = torch.cat((self.right_tcp_pose[:, :3], right_target_euler), dim=-1)
+        left_tcp_pos_noisy = self.left_tcp_pose[:, :3] + self.left_tcp_pos_noise_width  * 2. * (torch.rand_like(self.left_tcp_pose[:, :3]) - 0.5) + self.left_tcp_pos_bias
+        
+        left_tcp_euler = torch.stack(euler_xyz_from_quat(self.left_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
+        left_tcp_euler_noisy = left_tcp_euler + self.left_tcp_ori_noise_width * 2. * (torch.rand_like(left_tcp_euler) - 0.5) + self.left_tcp_ori_bias
+
+        self.left_tcp_pose = torch.cat((self.left_tcp_pose[:, :3], left_tcp_euler), dim=-1)
+        self.left_tcp_pose_noisy = torch.cat((left_tcp_pos_noisy, left_tcp_euler_noisy), dim=-1)
+
+        # right_target_euler = torch.stack(euler_xyz_from_quat(self.right_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
+        # self.right_tcp_pose = torch.cat((self.right_tcp_pose[:, :3], right_target_euler), dim=-1)
 
         # right_target_quat = quat_from_euler_xyz(self.right_tcp_pose[:, 3], self.right_tcp_pose[:, 4], self.right_tcp_pose[:, 5])
         # self.right_tcp_pose = torch.cat((self.right_tcp_pose[:,:3], right_target_quat), dim=-1).to(dtype=self.right_tcp_pose.dtype)
@@ -1267,16 +1294,35 @@ class OpenarmEnv(DirectRLEnv):
         self.tcp_twist_targets.copy_(twist_actions)
 
 
+    # def compute_student_policy_observations(self):
+    #     obs = torch.cat(
+    #         (
+    #             # robot
+    #             self.robot_dof_pos_noisy, 
+    #             self.robot_dof_vel_noisy,
+    #             self.left_gripper_joint_pos.unsqueeze(-1)+0.005*\
+    #             2.*(torch.rand(self.num_envs, 1, device=self.device) - 0.5), 
+    #             self.left_tcp_pose[:, :3]+0.01*\
+    #             2.*(torch.rand(self.num_envs, 3, device=self.device) - 0.5), 
+    #             self.left_tcp_pose[:, 3:]+0.08*\
+    #             2.*(torch.rand(self.num_envs, 3, device=self.device) - 0.5), 
+    #             self.left_tcp_vel+0.1*\
+    #             2.*(torch.rand(self.num_envs, 6, device=self.device) - 0.5), 
+    #             self.object_goal, 
+    #             self.actions, 
+    #         ),
+    #         dim=-1,
+    #     )
+
+    #     return obs
     def compute_student_policy_observations(self):
+        
         obs = torch.cat(
             (
                 # robot
                 self.robot_dof_pos_noisy, 
-                self.robot_dof_vel_noisy,
-                self.left_gripper_joint_pos.unsqueeze(-1),
-                self.left_tcp_pose[:, :3], 
-                self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], 
-                self.left_tcp_vel,
+                self.left_gripper_joint_pos_noisy.unsqueeze(-1), 
+                self.left_tcp_pose_noisy,
                 self.object_goal, 
                 self.actions, 
             ),

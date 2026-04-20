@@ -1,0 +1,382 @@
+"""
+openarm_policy_node_sync.py — rl_games student 정책 ROS2 노드
+──────────────────────────────────────────────────────────────────────────────────
+eval.py 기반. joint_states + tcp_pose 동기화, 카메라는 최신 프레임 버퍼링.
+
+Subscribe (sync):
+  /joint_states          sensor_msgs/JointState
+  /tcp_pose              geometry_msgs/PoseStamped
+Subscribe (buffer):
+  /head_camera/rgb/image_raw   sensor_msgs/Image
+  /wrist_camera/rgb/image_raw  sensor_msgs/Image
+  /goal_position               geometry_msgs/Point  (선택)
+
+Publish:
+  /joint_position_targets  sensor_msgs/JointState
+  /gripper_command         std_msgs/Float64
+
+Usage:
+  source /opt/ros/humble/setup.bash
+  cd ~/isaac_ws/DEXTRAH_CAM/dextrah_lab
+  python3 deployment_scripts/openarm_policy_node_sync.py \
+      --checkpoint distillation/runs/.../nn/student.pth \
+      --student_cfg tasks/openarm/agents/rl_games_ppo_mono_transformer.yaml \
+      --urdf ~/isaac_ws/openarm_bimanual.urdf \
+      --goal 0.25 0.15 0.30
+"""
+
+import argparse
+import pathlib
+import sys
+
+import message_filters
+import numpy as np
+import pinocchio as pin
+import torch
+import yaml
+from scipy.spatial.transform import Rotation as R
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+
+from sensor_msgs.msg import JointState, Image
+from geometry_msgs.msg import Point, PoseStamped
+from std_msgs.msg import Float64
+
+from rl_games.algos_torch import model_builder
+from rl_games.algos_torch.model_builder import ModelBuilder
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+from distillation.a2c_mono_transformer import A2CBuilder as A2CMonoTransformerBuilder
+from distillation.a2c_stereo_transformer import A2CBuilder as A2CStereoTransformerBuilder
+from distillation.a2c_with_aux_cnn import A2CBuilder as A2CWithAuxCNNBuilder
+from distillation.a2c_with_aux_cnn_stereo import A2CBuilder as A2CWithAuxCNNStereoBuilder
+from distillation.a2c_mono_resnet import A2CBuilder as A2CMonoResnetBuilder
+
+# ─── 로봇 설정 ────────────────────────────────────────────────────────────────
+LEFT_ARM_JOINTS    = [f"openarm_left_joint{i}" for i in range(1, 8)]
+LEFT_GRIPPER_JOINT = "openarm_left_finger_joint1"
+LEFT_EE_FRAME      = "openarm_left_hand_tcp"
+
+NUM_PROPRIO          = 38
+NUM_ACTIONS          = 7
+ACTION_SCALE_LINEAR  = 0.02
+ACTION_SCALE_ANGULAR = 0.1
+
+
+# ─── 유틸 ─────────────────────────────────────────────────────────────────────
+
+def load_param_dict(path: str) -> dict:
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+
+def adjust_state_dict_keys(ckpt_sd: dict, model_sd: dict) -> dict:
+    out = {}
+    for key, val in ckpt_sd.items():
+        if key in model_sd:
+            out[key] = val
+        else:
+            parts = key.split(".")
+            parts.insert(2, "_orig_mod")
+            new_key = ".".join(parts)
+            if new_key in model_sd:
+                out[new_key] = val
+            else:
+                no_orig = key.replace("_orig_mod.", "")
+                out[no_orig if no_orig in model_sd else key] = val
+    return out
+
+
+def decode_rgb(msg: Image) -> np.ndarray | None:
+    """sensor_msgs/Image → float32 (3, H, W) [0, 1]."""
+    if msg.encoding == "rgb8":
+        arr = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, 3).astype(np.float32) / 255.0
+    elif msg.encoding == "bgr8":
+        arr = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, 3).astype(np.float32) / 255.0
+        arr = arr[:, :, ::-1].copy()
+    elif msg.encoding == "mono8":
+        gray = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width).astype(np.float32) / 255.0
+        arr = np.stack([gray, gray, gray], axis=-1)
+    else:
+        return None
+    return arr.transpose(2, 0, 1)  # (3, H, W)
+
+
+def resize_img(arr: np.ndarray, h: int, w: int) -> np.ndarray:
+    if arr.shape[-2:] == (h, w):
+        return arr
+    from PIL import Image as PILImage
+    chans = [PILImage.fromarray((arr[c] * 255).astype(np.uint8)).resize((w, h), PILImage.BILINEAR) for c in range(3)]
+    return np.stack([np.array(c).astype(np.float32) / 255.0 for c in chans])
+
+
+# ─── IK Solver ────────────────────────────────────────────────────────────────
+
+class IKSolver:
+    def __init__(self, model: pin.Model, ee_frame: str,
+                 max_iter=200, eps=1e-4, damping=1e-6, dt=0.1):
+        self.model    = model
+        self.data     = model.createData()
+        self.ee_id    = model.getFrameId(ee_frame)
+        self.max_iter = max_iter
+        self.eps      = eps
+        self.damping  = damping
+        self.dt       = dt
+
+    def solve(self, q_init: np.ndarray, target: pin.SE3) -> np.ndarray:
+        q = q_init.copy()
+        for _ in range(self.max_iter):
+            pin.forwardKinematics(self.model, self.data, q)
+            pin.updateFramePlacements(self.model, self.data)
+            err = pin.log6(self.data.oMf[self.ee_id].actInv(target)).vector
+            if np.linalg.norm(err) < self.eps:
+                break
+            J  = pin.getFrameJacobian(self.model, self.data, self.ee_id, pin.LOCAL_WORLD_ALIGNED)
+            dq = J.T @ np.linalg.solve(J @ J.T + self.damping * np.eye(6), err)
+            q  = pin.integrate(self.model, q, dq * self.dt)
+        return q
+
+
+# ─── ROS2 Node ────────────────────────────────────────────────────────────────
+
+class OpenarmStudentNodeSync(Node):
+    def __init__(self, args):
+        super().__init__("openarm_student_node_sync")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.img_h  = args.img_h
+        self.img_w  = args.img_w
+
+        # ── student 모델 로드 ──
+        self._register_networks()
+        params          = load_param_dict(args.student_cfg)["params"]
+        normalize_value = params["config"]["normalize_value"]
+        normalize_input = params["config"]["normalize_input"]
+
+        model_config = {
+            "actions_num":     NUM_ACTIONS,
+            "input_shape":     (NUM_PROPRIO,),
+            "batch_size":      1,
+            "num_seqs":        1,
+            "value_size":      1,
+            "normalize_value": normalize_value,
+            "normalize_input": normalize_input,
+        }
+        network    = ModelBuilder().load(params)
+        self.model = network.build(model_config).to(self.device)
+        self.model.eval()
+
+        weights = torch.load(args.checkpoint, map_location=self.device)
+        if "model" in weights:
+            weights["model"] = adjust_state_dict_keys(weights["model"], self.model.state_dict())
+            self.model.load_state_dict(weights["model"])
+        else:
+            self.model.load_state_dict(weights)
+        if normalize_input and "running_mean_std" in weights:
+            self.model.running_mean_std.load_state_dict(weights["running_mean_std"])
+        self.get_logger().info(f"Student model loaded: {args.checkpoint}")
+
+        self.is_rnn = self.model.is_rnn()
+        if self.is_rnn:
+            self.hidden_states = tuple(s.to(self.device) for s in self.model.get_default_rnn_state())
+        self.prev_actions = torch.zeros((1, NUM_ACTIONS), device=self.device)
+
+        # ── Pinocchio ──
+        urdf = str(args.urdf).replace("~", str(pathlib.Path.home()))
+        self.pin_model, _, _ = pin.buildModelsFromUrdf(urdf)
+        self.pin_data         = self.pin_model.createData()
+        self.ik_solver        = IKSolver(self.pin_model, LEFT_EE_FRAME)
+        self.get_logger().info(f"URDF loaded: {urdf}")
+
+        # ── 상태 ──
+        self.goal          = np.array(args.goal, dtype=np.float32)
+        self.prev_action   = np.zeros(NUM_ACTIONS, dtype=np.float32)
+        self._prev_tcp_pos = np.zeros(3)
+        self._prev_time    = None
+
+        # ── QoS ──
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=5,
+        )
+
+        # ── 이미지 버퍼 ──
+        self._head_msg  = None
+        self._wrist_msg = None
+
+        # ── ApproximateTimeSynchronizer: joint_states + tcp_pose ──
+        sub_joints = message_filters.Subscriber(self, JointState,    "/joint_states", qos_profile=qos)
+        sub_tcp    = message_filters.Subscriber(self, PoseStamped,   "/tcp_pose",     qos_profile=qos)
+        self._sync = message_filters.ApproximateTimeSynchronizer(
+            [sub_joints, sub_tcp], queue_size=10, slop=0.005
+        )
+        self._sync.registerCallback(self._synced_cb)
+
+        # ── 이미지·목표 subscribers (버퍼링) ──
+        self.create_subscription(Image, "/head_camera/rgb/image_raw",  self._head_cb,  qos)
+        self.create_subscription(Image, "/wrist_camera/rgb/image_raw", self._wrist_cb, qos)
+        #self.create_subscription(Point, "/goal_position",              self._goal_cb,  10)
+
+        # ── Publishers ──
+        self.pub_joints  = self.create_publisher(JointState, "/joint_position_targets", 10)
+        self.pub_gripper = self.create_publisher(Float64,    "/gripper_command",         10)
+
+        self.get_logger().info("OpenArm Student Node (sync) ready")
+
+    def _register_networks(self):
+        model_builder.register_network("a2c_mono_transformer",   A2CMonoTransformerBuilder)
+        model_builder.register_network("a2c_stereo_transformer", A2CStereoTransformerBuilder)
+        model_builder.register_network("a2c_aux_cnn_net",        A2CWithAuxCNNBuilder)
+        model_builder.register_network("a2c_aux_cnn_net_stereo", A2CWithAuxCNNStereoBuilder)
+        model_builder.register_network("a2c_mono_resnet",        A2CMonoResnetBuilder)
+
+    # ── Callbacks ──────────────────────────────────────────────────────────────
+
+    # def _goal_cb(self, msg: Point):
+    #     self.goal = np.array([msg.x, msg.y, msg.z], dtype=np.float32)
+
+    def _head_cb(self, msg: Image):
+        self._head_msg = msg
+
+    def _wrist_cb(self, msg: Image):
+        self._wrist_msg = msg
+
+    def _synced_cb(self, joint_msg: JointState, tcp_msg: PoseStamped):
+        head_msg  = self._head_msg
+        wrist_msg = self._wrist_msg
+        if head_msg is None or wrist_msg is None:
+            return
+
+        # ── joint state 파싱 ──
+        name_idx  = {n: i for i, n in enumerate(joint_msg.name)}
+        joint_pos = np.zeros(7)
+        joint_vel = np.zeros(7)
+        for j, jname in enumerate(LEFT_ARM_JOINTS):
+            if jname in name_idx:
+                idx = name_idx[jname]
+                joint_pos[j] = joint_msg.position[idx]
+                joint_vel[j] = joint_msg.velocity[idx] if joint_msg.velocity else 0.0
+        gripper = joint_msg.position[name_idx[LEFT_GRIPPER_JOINT]] if LEFT_GRIPPER_JOINT in name_idx else 0.0
+
+        # ── TCP pose (토픽에서 직접) ──
+        p = tcp_msg.pose.position
+        o = tcp_msg.pose.orientation
+        tcp_pos  = np.array([p.x, p.y, p.z], dtype=np.float32)
+        tcp_quat = np.array([o.w, o.x, o.y, o.z], dtype=np.float32)  # w,x,y,z
+
+        # ── TCP 속도 (타임스탬프 기반 유한차분) ──
+        now = tcp_msg.header.stamp.sec + tcp_msg.header.stamp.nanosec * 1e-9
+        dt  = (now - self._prev_time) if self._prev_time is not None else 1.0 / 60.0
+        dt  = max(dt, 1e-4)
+        tcp_vel       = np.zeros(6)
+        tcp_vel[:3]   = (tcp_pos - self._prev_tcp_pos) / dt
+        self._prev_tcp_pos = tcp_pos.copy()
+        self._prev_time    = now
+
+        # ── 이미지 ──
+        head_arr  = decode_rgb(head_msg)
+        wrist_arr = decode_rgb(wrist_msg)
+        if head_arr is None or wrist_arr is None:
+            self.get_logger().warn("이미지 디코딩 실패, 스텝 스킵")
+            return
+        head_arr  = resize_img(head_arr,  self.img_h, self.img_w)
+        wrist_arr = resize_img(wrist_arr, self.img_h, self.img_w)
+
+        # ── proprio (38-dim) ──
+        proprio = np.concatenate([
+            joint_pos,         # 7
+            joint_vel,         # 7
+            [gripper],         # 1
+            tcp_pos,           # 3
+            tcp_quat,          # 4
+            tcp_vel,           # 6
+            self.goal,         # 3
+            self.prev_action,  # 7
+        ]).astype(np.float32)
+
+        obs_t   = torch.from_numpy(proprio).float().unsqueeze(0).to(self.device)
+        head_t  = torch.from_numpy(head_arr).float().unsqueeze(0).to(self.device)
+        wrist_t = torch.from_numpy(wrist_arr).float().unsqueeze(0).to(self.device)
+
+        # ── batch_dict ──
+        batch_dict = {
+            "is_train":     False,
+            "obs":          obs_t,
+            "prev_actions": self.prev_actions,
+        }
+        batch_dict["img_left"]  = head_t
+        batch_dict["img_right"] = wrist_t
+
+        if self.is_rnn:
+            batch_dict["rnn_states"] = self.hidden_states
+            batch_dict["seq_length"] = 1
+            batch_dict["rnn_masks"]  = None
+
+        batch_dict["finetune_backbone"] = False
+
+        # ── 추론 ──
+        with torch.no_grad():
+            res_dict = self.model(batch_dict)
+
+        if self.is_rnn:
+            rnn_out = res_dict["rnn_states"]
+            self.hidden_states = tuple(
+                s.detach() for s in (rnn_out[0] if isinstance(rnn_out[0], tuple) else rnn_out)
+            )
+
+        action = res_dict["mus"].squeeze(0).cpu().numpy()
+        action = np.clip(action, -1.0, 1.0)
+        self.prev_actions = torch.from_numpy(action).float().unsqueeze(0).to(self.device)
+        self.prev_action  = action.copy()
+
+        # ── 액션 해석 ──
+        target_pos = tcp_pos + action[:3] * ACTION_SCALE_LINEAR
+        curr_rpy   = R.from_quat([tcp_quat[1], tcp_quat[2], tcp_quat[3], tcp_quat[0]]).as_euler("xyz")
+        target_rot = R.from_euler("xyz", curr_rpy + action[3:6] * ACTION_SCALE_ANGULAR).as_matrix()
+        target_se3 = pin.SE3(target_rot, target_pos)
+        gripper_cmd = 0.044 if action[6] > 0.0 else 0.0
+
+        # ── IK ──
+        q_init = np.zeros(self.pin_model.nq)
+        q_init[:7] = joint_pos
+        q_sol = self.ik_solver.solve(q_init, target_se3)
+
+        # ── Publish ──
+        js = JointState()
+        js.header.stamp = joint_msg.header.stamp
+        js.name         = LEFT_ARM_JOINTS
+        js.position     = q_sol[:7].tolist()
+        self.pub_joints.publish(js)
+
+        gm      = Float64()
+        gm.data = gripper_cmd
+        self.pub_gripper.publish(gm)
+
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--checkpoint",  required=True)
+    parser.add_argument("--student_cfg", required=True)
+    parser.add_argument("--urdf",        default="~/isaac_ws/openarm_bimanual.urdf")
+    parser.add_argument("--goal",        nargs=3, type=float, default=[0.25, 0.15, 0.30], metavar=("X", "Y", "Z"))
+    parser.add_argument("--img_h",       type=int, default=192)
+    parser.add_argument("--img_w",       type=int, default=240)
+    args = parser.parse_args()
+
+    rclpy.init()
+    node = OpenarmStudentNodeSync(args)
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
