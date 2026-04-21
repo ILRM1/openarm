@@ -319,18 +319,19 @@ class DextrahFGPNode(Node):
 
         self.last_actions = torch.zeros(self.batch_size, self.num_actions, device=self.device)
 
-        # FGP publishers
+        # publishers
         # For commanding pose target
         self.left_tcp_pose_targets = None
         self._left_tcp_pose_lock = Lock()
         self._left_tcp_pose_command_pub = self.create_publisher(PoseStamped, '/left/ik_target_pose', 1)
         self._left_tcp_pose_timer = self.create_timer(self._publish_dt, self._left_tcp_pose_pub_callback)
 
-        # Subscriber for getting PCA commands
         self.left_gripper_pos_targets = None
         self._left_gripper_pos_lock = Lock()
         self._left_gripper_pos_command_pub = self.create_publisher(JointState, '/left_gripper_pos_commands', 1)
         self._left_gripper_pos_timer = self.create_timer(self._publish_dt, self._left_gripper_pos_pub_callback)
+
+        self.openarm_pos_command_pub = self.create_publisher(JointState, "/arm/command", 1)
 
         # Create publisher for predicted object pose
         self._object_pos_lock = Lock()
@@ -528,7 +529,7 @@ class DextrahFGPNode(Node):
         with self._left_tcp_pose_lock:
             if self.left_tcp_pose_targets is not None:
                 left_tcp_pose_targets = self.left_tcp_pose_targets[0,:].float().detach().cpu().numpy()
-
+        
         if left_tcp_pose_targets is not None:
             msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
@@ -549,8 +550,8 @@ class DextrahFGPNode(Node):
         left_gripper_pos_targets = None
         with self._left_gripper_pos_lock:
             if self.left_gripper_pos_targets is not None:
-                left_gripper_pos_targets = self.left_gripper_pos_targets[0,:].float().detach().cpu().numpy()
-        
+                left_gripper_pos_targets = self.left_gripper_pos_targets.float().detach().cpu().numpy()
+      
 
         if left_gripper_pos_targets is not None:
       
@@ -561,6 +562,7 @@ class DextrahFGPNode(Node):
             msg.velocity = []
             msg.effort = []
             self._left_gripper_pos_command_pub.publish(msg)
+    
 
     def _object_pos_callback(self):
         """
@@ -620,7 +622,7 @@ class DextrahFGPNode(Node):
 
     def compute_observation(self):
 
-        feedback_timed_out = False
+        feedback_timed_out = True
 
         state = torch.cat(
             (
@@ -632,27 +634,16 @@ class DextrahFGPNode(Node):
             ),
             dim=-1
         )
-
-        # TODO: undo this
-        #state *= 0.
-
+    
         # Copy camera image
         left_image = None
         with self._left_image_lock:
-            end = time.time()
-            if (end - self.camera_left_feedback_time) > (3. * self._publish_dt): 
-                print('no feedback from left camera')
-                feedback_timed_out = True
             left_image = torch.clone(self._left_image)
 
         right_image = None
         with self._right_image_lock:
-            end = time.time()
-            if (end - self.camera_right_feedback_time) > (3. * self._publish_dt): 
-                print('no feedback from right camera')
-                feedback_timed_out = True
             right_image = torch.clone(self._right_image)
-
+    
         return state, left_image, right_image, feedback_timed_out
 
     def compute_actions(self, state, left_image, right_image, transmit=True, save_pth=False):
@@ -681,10 +672,10 @@ class DextrahFGPNode(Node):
 
         left_tcp_pos_targets = self.left_tcp_pose[:,:3] + actions[:,:3] * self.action_scale[0]
         left_tcp_ori_targets = self.left_tcp_pose[:,3:6] + actions[:,3:6] * self.action_scale[1]
-
+        
         left_tcp_pose_targets = torch.cat((left_tcp_pos_targets, left_tcp_ori_targets), dim=-1)
         left_tcp_pose_targets = torch.max(torch.min(left_tcp_pose_targets, self.tcp_pose_max), self.tcp_pose_min)
-
+        
         # euler → quaternion (w,x,y,z)
         euler_np = left_tcp_pose_targets[0, 3:6].cpu().numpy()
         tq = R.from_euler('XYZ', euler_np).as_quat()  # x,y,z,w (extrinsic XYZ)
@@ -719,8 +710,36 @@ class DextrahFGPNode(Node):
             # Update last action
             self.last_actions = actions.clone()
 
+    def publish_init_pos(self):
+        msg = JointState()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.name = [
+            'openarm_left_joint1',  
+            'openarm_left_joint2',  
+            'openarm_left_joint3',  
+            'openarm_left_joint4',  
+            'openarm_left_joint5',  
+            'openarm_left_joint6',  
+            'openarm_left_joint7',  
+            'openarm_left_finger_joint1', 
+
+            'openarm_right_joint1',
+            'openarm_right_joint2',
+            'openarm_right_joint3',
+            'openarm_right_joint4',
+            'openarm_right_joint5',
+            'openarm_right_joint6',
+            'openarm_right_joint7',
+            'openarm_right_finger_joint1',
+        ]
+        msg.position = [0.9, -0.35, -0.24, 2.0, -0.54, 0., 1.1, 0.044, 
+                        -0.9, 0.35, 0.24, 2.0, 0.54, 0., -1.1, 0.044]
+        msg.velocity = []
+        msg.effort = []
+        self.openarm_pos_command_pub.publish(msg)
+        self.get_logger().info('Published init position')
+
     def burn_in(self):
-        feedback_timed_out = True
         for i in range(5):
             # Pack and prepare observations
             state, left_image, right_image, feedback_timed_out = self.compute_observation()
@@ -728,32 +747,28 @@ class DextrahFGPNode(Node):
             # Query the FGP for actions
             # NOTE: publisher callbacks will pull action data from tensors
             # into lists themselves and publish
-            if not feedback_timed_out:
-                print('copmute actions')
-                self.compute_actions(state, left_image, right_image)
-            else:
-                print('not computingn actions')
-                self.compute_actions(state, left_image, right_image, transmit=False)
+           
+            self.compute_actions(state, left_image, right_image, transmit=False)
 
             time.sleep(1./60)
-
-        if feedback_timed_out is True:
-            print('Failed to burn in policy due to lack of obs')
-            sys.exit()
 
         # Clear memory
         self.dextrah_fgp.reset_hidden_state()
 
     def run(self):
+        
         # Main control loop
         control_iter = 0
         print_iter = 60
         loop_time_filtered = 0.
 
+        # Publish init position once
+        self.publish_init_pos()
+
         # Burn in
         print('Burning in')
         self.burn_in()
-
+       
         print('Engaging policy')
         while rclpy.ok():
 
@@ -773,11 +788,9 @@ class DextrahFGPNode(Node):
             # NOTE: publisher callbacks will pull action data from tensors
             # into lists themselves and publish
             # TODO: if times out again, probably should send robot to home position
-            if not feedback_timed_out:
-                self.compute_actions(state, left_image, right_image)
-            else:
-                print('not computingn actions')
-
+         
+            self.compute_actions(state, left_image, right_image)
+           
             # # Reset hidden state if not engaging FGP
             # with self._engage_fgp_lock:
             #     if self.engage_fgp is False:
@@ -798,8 +811,9 @@ class DextrahFGPNode(Node):
             if (control_iter % print_iter) == 0:
                 print('avg control rate', 1./loop_time_filtered)
 
-            if self._save_images and (control_iter % self._save_interval) == 0:
-                self.save_images(control_iter)
+            # if self._save_images and (control_iter % self._save_interval) == 0:
+            #     self.save_images(control_iter)
+            self.save_images(control_iter)
 
             control_iter += 1
 
@@ -808,15 +822,16 @@ class DextrahFGPNode(Node):
             left = self._left_image
         with self._right_image_lock:
             right = self._right_image
-
+     
         ts = int(time.time() * 1000)
         if left is not None:
+         
             img = (left[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-            cv2.imwrite(os.path.join(self._save_dir, f"{ts}_left_{control_iter:06d}.jpg"),
+            cv2.imwrite(os.path.join(self._save_dir, f"head.jpg"),
                         cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
         if right is not None:
             img = (right[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-            cv2.imwrite(os.path.join(self._save_dir, f"{ts}_right_{control_iter:06d}.jpg"),
+            cv2.imwrite(os.path.join(self._save_dir, f"wrist_left.jpg"),
                         cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
     def test_spinning(self):

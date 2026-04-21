@@ -131,7 +131,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     distillation = False
     num_states = 38
     num_observations = 38
-    num_student_observations = 38
+    num_student_observations = 24
     num_teacher_observations = num_observations
 
     state_space = 0
@@ -295,8 +295,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
                                  [0.0, FY, CY], 
                                  [0.0, 0.0, 1.0]]
 
-    horizontal_aperture = float(2.0 * efl_mm * np.tan(hfov / 2.0))
-    vertical_aperture = float(2.0 * efl_mm * np.tan(vfov / 2.0))
+    horizontal_aperture = float(2.0 * efl_mm * np.tan(hfov / 2.0)) # 10.09577
+    vertical_aperture = float(2.0 * efl_mm * np.tan(vfov / 2.0)) # 6.14227
 
     head_cam_cfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Robot/openarm_body_link/Camera",
@@ -342,9 +342,9 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
                                   [0.0, FY, CY], 
                                   [0.0, 0.0, 1.0]]
 
-    horizontal_aperture = float(2.0 * efl_mm * np.tan(hfov / 2.0))
-    vertical_aperture = float(2.0 * efl_mm * np.tan(vfov / 2.0))
-
+    horizontal_aperture = float(2.0 * efl_mm * np.tan(hfov / 2.0)) # 8.17542
+    vertical_aperture = float(2.0 * efl_mm * np.tan(vfov / 2.0)) # 5.55511
+   
     wrist_L_cam_cfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Robot/openarm_left_link7/Camera",
         offset=TiledCameraCfg.OffsetCfg(
