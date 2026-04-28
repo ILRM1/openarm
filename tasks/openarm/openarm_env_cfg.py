@@ -138,8 +138,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     observation_space = 0
     action_space = 0
 
-    #action_scale = (0.01, 0.06, 0.044)
-    action_scale = (0.02, 0.1, 0.044)
+    action_scale = (0.01, 0.06, 0.044)
+    #action_scale = (0.02, 0.1, 0.044)
     #action_scale = (0.04, 0.2, 0.044)
     
     asymmetric_obs = True
@@ -265,10 +265,10 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             rot=(1.0, 0.0, 0.0, 0.0)),
     )
     # distillation related parameters
-    img_width = 120  
-    img_height = 96
-    # img_width = 240  
-    # img_height = 192
+    # img_width = 120  
+    # img_height = 96
+    img_width = 240  
+    img_height = 192
     camera_rand_rot_range = 3
     camera_rand_pos_range = 0.03
 
@@ -295,8 +295,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
                                  [0.0, FY, CY], 
                                  [0.0, 0.0, 1.0]]
 
-    horizontal_aperture = float(2.0 * efl_mm * np.tan(hfov / 2.0)) # 10.09577
-    vertical_aperture = float(2.0 * efl_mm * np.tan(vfov / 2.0)) # 6.14227
+    horizontal_aperture = float(2.0 * efl_mm * np.tan(hfov / 2.0))
+    vertical_aperture = float(2.0 * efl_mm * np.tan(vfov / 2.0))
 
     head_cam_cfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Robot/openarm_body_link/Camera",
@@ -309,7 +309,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 1.),   
+            clipping_range=(0.01, 3.),   
             projection_type="pinhole",
         ),
         width=head_img_width,   
@@ -342,9 +342,9 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
                                   [0.0, FY, CY], 
                                   [0.0, 0.0, 1.0]]
 
-    horizontal_aperture = float(2.0 * efl_mm * np.tan(hfov / 2.0)) # 8.17542
-    vertical_aperture = float(2.0 * efl_mm * np.tan(vfov / 2.0)) # 5.55511
-   
+    horizontal_aperture = float(2.0 * efl_mm * np.tan(hfov / 2.0))
+    vertical_aperture = float(2.0 * efl_mm * np.tan(vfov / 2.0))
+
     wrist_L_cam_cfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Robot/openarm_left_link7/Camera",
         offset=TiledCameraCfg.OffsetCfg(
@@ -356,7 +356,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 1.),   
+            clipping_range=(0.01, 3.),   
             projection_type="pinhole",
         ),
         width=wrist_img_width,   
@@ -377,7 +377,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 1.),   
+            clipping_range=(0.01, 3.),   
             projection_type="pinhole",
         ),
         width=wrist_img_width,   
@@ -494,7 +494,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # NOTE: first number in range is the starting value, second number is terminal value
     adr_custom_cfg_dict = {
         "object_wrench": {
-            "max_linear_accel": (0., 5.)
+            "max_linear_accel": (0., 10.)
         },
         "object_spawn": {
             "x_width_spawn": (0., x_width),

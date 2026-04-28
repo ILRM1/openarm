@@ -10,7 +10,6 @@ import argparse
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped, TransformStamped
-from geometry_msgs.msg import Vector3Stamped
 from sensor_msgs.msg import JointState, Image
 from tf2_ros import TransformBroadcaster
 from std_msgs.msg import Bool
@@ -21,6 +20,8 @@ import yaml
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import pytorch_kinematics as pk
+from typing import Optional
 
 # CV
 from cv_bridge import CvBridge
@@ -75,6 +76,7 @@ def adjust_state_dict_keys(checkpoint_state_dict, model_state_dict):
 
     print(f"Number of elements in adjusted state dict: {num_elems}")
     return adjusted_state_dict
+
 
 class DextrAHFGP:
     def __init__(
@@ -242,17 +244,9 @@ class DextrahFGPNode(Node):
         self.num_actions = 7
         self.num_obs = 24
         self.action_scale = (0.02, 0.1, 0.044)
-        self.tcp_pose_min = torch.tensor([0.05, 0., 0.21, -np.pi, -np.pi, -np.pi], device=self.device)
-        self.tcp_pose_max = torch.tensor([0.45, 0.4, 0.35, np.pi, np.pi, np.pi], device=self.device)
-
-        # Set the warp cache directory based on device
-        warp_cache_dir = ""
-
-        # Image saving
-        self._save_images = True
-        self._save_dir = os.path.join(os.path.dirname(__file__), "saved_images")
-        self._save_interval = 30  # save every N control iterations
-        os.makedirs(self._save_dir, exist_ok=True)
+        self.tcp_pose_min = torch.tensor([0.05, 0., 0.21, -np.pi*2, -np.pi*2, -np.pi*2], device=self.device)
+        self.tcp_pose_max = torch.tensor([0.45, 0.4, 0.35, np.pi*2, np.pi*2, np.pi*2], device=self.device)
+        self.student_ckpt = "distillation/runs/dextrah_student_100000_iters.pth"
 
         # For converting ROS image messages to CV formates
         self.bridge = CvBridge()
@@ -262,26 +256,16 @@ class DextrahFGPNode(Node):
         self._right_image_lock = Lock()
         self._left_image = None
         self._right_image = None
-        self._image_height = 384
-        self._image_width = 480
+        self._image_height = 192
+        self._image_width = 240 
 
         # NOTE: expecting 1/2 the resolution
-        self._downsample_factor = 2
+        self._downsample_factor = 1
         self.camera_left_feedback_time = time.time()
-        self.camera_left_sub = self.create_subscription(
-            Image,
-            '/camera/image',
-            self._left_camera_callback,
-            10
-        )
+        self.camera_left_sub = self.create_subscription(Image, '/camera/image', self._left_camera_callback, 10)
 
         self.camera_right_feedback_time = time.time()
-        self.camera_right_sub = self.create_subscription(
-            Image,
-            '/wristcam_left/image',
-            self._right_camera_callback,
-            10
-        )
+        self.camera_right_sub = self.create_subscription(Image, '/wristcam_left/image',self._right_camera_callback,10)
 
         # Robot subscribers
         self.robot_q = torch.zeros(self.batch_size, 16, device=self.device)
@@ -292,24 +276,7 @@ class DextrahFGPNode(Node):
         self._openarm_joint_position_lock = Lock()
         self._left_tcp_pose_sub_lock = Lock()
         self._openarm_sub = self.create_subscription(JointState(), '/joint_states', self._openarm_sub_callback, 1)
-        self._tcp_pose_sub = self.create_subscription(
-            PoseStamped(),
-            '/tcp_pose/left',
-            self._tcp_pose_sub_callback,
-            1)
-        #joint_command
-        # Fabric subscribers
-        self.fabric_q = torch.zeros(self.batch_size, 23, device=self.device)
-        self.fabric_qd = torch.zeros(self.batch_size, 23, device=self.device)
-        self.fabric_qdd = torch.zeros(self.batch_size, 23, device=self.device)
-        self.fabric_feedback_time = time.time()
-        self._fabric_feedback_lock = Lock()
-
-        # self._fabric_sub = self.create_subscription(
-        #     JointState(),
-        #     '/kuka_allegro_fabric/joint_states',
-        #     self._fabric_sub_callback,
-        #     1)
+        self._tcp_pose_sub = self.create_subscription(PoseStamped(), '/tcp_pose/left', self._tcp_pose_sub_callback, 1)
 
         self._publish_rate = 60. # Hz
         self._publish_dt = 1./self._publish_rate # s
@@ -319,38 +286,26 @@ class DextrahFGPNode(Node):
 
         self.last_actions = torch.zeros(self.batch_size, self.num_actions, device=self.device)
 
-        # FGP publishers
+        # publishers
         # For commanding pose target
         self.left_tcp_pose_targets = None
         self._left_tcp_pose_lock = Lock()
         self._left_tcp_pose_command_pub = self.create_publisher(PoseStamped, '/left/ik_target_pose', 1)
-        self._left_tcp_pose_timer = self.create_timer(self._publish_dt, self._left_tcp_pose_pub_callback)
+        self._left_tcp_pose_timer = self.create_timer(self._publish_dt, self._left_tcp_target_pose_pub_callback)
 
-        # Subscriber for getting PCA commands
         self.left_gripper_pos_targets = None
         self._left_gripper_pos_lock = Lock()
-        self._left_gripper_pos_command_pub = self.create_publisher(JointState, '/left_gripper_pos_commands', 1)
+
+        self._gripper_pos_command_pub = self.create_publisher(JointState, '/left/gripper_command', 1)
         self._left_gripper_pos_timer = self.create_timer(self._publish_dt, self._left_gripper_pos_pub_callback)
+        self._arm_init_pub = self.create_publisher(JointState, '/arm/command', 1)
 
         # Create publisher for predicted object pose
         self._object_pos_lock = Lock()
         self.object_pos = None
-#        self._object_pos_pub = self.create_publisher(
-#            PoseStamped,
-#            "/kuka_allegro_fabric/predicted_obj_pose",
-#            1)
+        # self._object_pos_pub = self.create_publisher(PoseStamped, "/kuka_allegro_fabric/predicted_obj_pose", 1)
         self.object_pos_tf = TransformBroadcaster(self)
-        self._fgp_object_pos_timer = self.create_timer(self._publish_dt,
-                                                       self._object_pos_callback)
-
-        # Create subscriber for activating, deactivating FGP
-        # self._engage_fgp_lock = Lock()
-        # self.engage_fgp = False
-        # self._engage_fgp_sub = self.create_subscription(
-        #     Bool,
-        #     '/engage_fgp',
-        #     self._engage_fgp_callback,
-        #     1)
+        self._fgp_object_pos_timer = self.create_timer(self._publish_dt, self._object_pos_callback)
 
         # Instantiate FGP
         self.init_fgp()
@@ -369,14 +324,7 @@ class DextrahFGPNode(Node):
         )
 
         # get path to checkpoint
-        # NOTE: This assumes that in the root directory of dextrah_lab, the checkpoint is stored in a folder called pretrained_ckpts
-        # First RGB student that transferred
-        student_ckpt = "distillation/runs/dextrah_student_100000_iters.pth"
-
-        student_ckpt_path = os.path.join(
-            parent_path,
-            student_ckpt
-        )
+        student_ckpt_path = os.path.join(parent_path, self.student_ckpt)
 
         # register our custom model with the rl_games model builder
         model_builder.register_network("a2c_stereo_transformer", A2CStereoTransformerBuilder)
@@ -465,8 +413,6 @@ class DextrahFGPNode(Node):
         with self._right_image_lock:
             self.camera_right_feedback_time = time.time()
             self._right_image = torch.from_numpy(img_np).to(self.device).unsqueeze(0)
-            # # Now flip
-            # self._right_image = torch.flip(self._right_image, dims=(2,3))
 
     def _openarm_sub_callback(self, msg):
 
@@ -499,6 +445,7 @@ class DextrahFGPNode(Node):
             self.robot_qd[:, 14:15].copy_(torch.tensor([lf_vel], dtype=torch.float32, device=self.device))
             self.robot_q[:,  15:16].copy_(torch.tensor([rf_pos], dtype=torch.float32, device=self.device))
             self.robot_qd[:, 15:16].copy_(torch.tensor([rf_vel], dtype=torch.float32, device=self.device))
+            
 
     def _tcp_pose_sub_callback(self, msg):
 
@@ -509,18 +456,18 @@ class DextrahFGPNode(Node):
         )
 
         quat_xyzw = [o.x, o.y, o.z, o.w]
-        euler = R.from_quat(quat_xyzw).as_euler('XYZ')  # extrinsic XYZ (Isaac Sim convention)
+   
+        euler = R.from_quat(quat_xyzw).as_euler('xyz')
         euler = torch.tensor(euler, dtype=torch.float32, device=self.device)
 
         left_tcp_pose = torch.cat((left_tcp_pos, euler), dim=-1).to(dtype=left_tcp_pos.dtype)
-      
+       
         # Copy over to robot state tensors
         with self._left_tcp_pose_sub_lock:
             self.left_tcp_pose_feedback_time = time.time()
             self.left_tcp_pose.copy_(left_tcp_pose)
 
-
-    def _left_tcp_pose_pub_callback(self):
+    def _left_tcp_target_pose_pub_callback(self):
         """
         Publishes latest FGP pose command.
         """
@@ -528,7 +475,7 @@ class DextrahFGPNode(Node):
         with self._left_tcp_pose_lock:
             if self.left_tcp_pose_targets is not None:
                 left_tcp_pose_targets = self.left_tcp_pose_targets[0,:].float().detach().cpu().numpy()
-
+        
         if left_tcp_pose_targets is not None:
             msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
@@ -549,18 +496,46 @@ class DextrahFGPNode(Node):
         left_gripper_pos_targets = None
         with self._left_gripper_pos_lock:
             if self.left_gripper_pos_targets is not None:
-                left_gripper_pos_targets = self.left_gripper_pos_targets[0,:].float().detach().cpu().numpy()
-        
-
+                left_gripper_pos_targets = self.left_gripper_pos_targets.float().detach().cpu().numpy()
+      
         if left_gripper_pos_targets is not None:
       
             msg = JointState()
-            msg.name = ['gripper_pos']
+            msg.name = ['openarm_left_finger_joint1']
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.position = left_gripper_pos_targets.tolist()
             msg.velocity = []
             msg.effort = []
-            self._left_gripper_pos_command_pub.publish(msg)
+            self._gripper_pos_command_pub.publish(msg)
+
+    def publish_init_pos(self):
+        msg = JointState()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.name = [
+            'openarm_left_joint1',  
+            'openarm_left_joint2',  
+            'openarm_left_joint3',  
+            'openarm_left_joint4',  
+            'openarm_left_joint5',  
+            'openarm_left_joint6',  
+            'openarm_left_joint7',  
+            'openarm_left_finger_joint1', 
+
+            'openarm_right_joint1',
+            'openarm_right_joint2',
+            'openarm_right_joint3',
+            'openarm_right_joint4',
+            'openarm_right_joint5',
+            'openarm_right_joint6',
+            'openarm_right_joint7',
+            'openarm_right_finger_joint1',
+        ]
+        msg.position = [0.9, -0.35, -0.24, 2.0, -0.54, 0., 1.1, 0.044, 
+                        -0.9, 0.35, 0.24, 2.0, 0.54, 0., -1.1, 0.044]
+        msg.velocity = []
+        msg.effort = []
+        self._arm_init_pub.publish(msg)
+        self.get_logger().info('Published init position')
 
     def _object_pos_callback(self):
         """
@@ -572,75 +547,84 @@ class DextrahFGPNode(Node):
                 object_pos = self.object_pos[0,:].float().detach().cpu().numpy()
 
         if object_pos is not None:
-            # engage_fgp = False
-            # with self._engage_fgp_lock:
-            #     engage_fgp = self.engage_fgp
-            engage_fgp = True
-            if engage_fgp:
-    #            pose_msg = PoseStamped()
-    #            pose_msg.header.stamp = self.get_clock().now().to_msg()
-    #            pose_msg.header.frame_id = 'robot_base'# Set the frame ID
-    #
-    #            pose_msg.pose.position.x = float(object_pos[0])
-    #            pose_msg.pose.position.y = float(object_pos[1])
-    #            pose_msg.pose.position.z = float(object_pos[2])
-    #            pose_msg.pose.orientation.x = 0.0
-    #            pose_msg.pose.orientation.y = 0.0
-    #            pose_msg.pose.orientation.z = 0.0
-    #            pose_msg.pose.orientation.w = 1.0
-    #
-    #            # Publish the message
-    #            self._object_pos_pub.publish(pose_msg)
-                # Create the transform message
-                t = TransformStamped()
+      
+#            pose_msg = PoseStamped()
+#            pose_msg.header.stamp = self.get_clock().now().to_msg()
+#            pose_msg.header.frame_id = 'robot_base'# Set the frame ID
+#
+#            pose_msg.pose.position.x = float(object_pos[0])
+#            pose_msg.pose.position.y = float(object_pos[1])
+#            pose_msg.pose.position.z = float(object_pos[2])
+#            pose_msg.pose.orientation.x = 0.0
+#            pose_msg.pose.orientation.y = 0.0
+#            pose_msg.pose.orientation.z = 0.0
+#            pose_msg.pose.orientation.w = 1.0
+#
+#            # Publish the message
+#            self._object_pos_pub.publish(pose_msg)
+            # Create the transform message
+            t = TransformStamped()
 
-                # Set the header information
-                t.header.stamp = self.get_clock().now().to_msg()
-                t.header.frame_id = 'robot_base'
-                t.child_frame_id = 'obj_pos'
+            # Set the header information
+            t.header.stamp = self.get_clock().now().to_msg()
+            t.header.frame_id = 'robot_base'
+            t.child_frame_id = 'obj_pos'
 
-                # Set the translation (x, y, z)
-                t.transform.translation.x = float(object_pos[0])
-                t.transform.translation.y = float(object_pos[1])
-                t.transform.translation.z = float(object_pos[2])
+            # Set the translation (x, y, z)
+            t.transform.translation.x = float(object_pos[0])
+            t.transform.translation.y = float(object_pos[1])
+            t.transform.translation.z = float(object_pos[2])
 
-                # Set the rotation as a quaternion (x, y, z, w)
-                t.transform.rotation.x = 0.0
-                t.transform.rotation.y = 0.0
-                t.transform.rotation.z = 0.0
-                t.transform.rotation.w = 1.0
+            # Set the rotation as a quaternion (x, y, z, w)
+            t.transform.rotation.x = 0.0
+            t.transform.rotation.y = 0.0
+            t.transform.rotation.z = 0.0
+            t.transform.rotation.w = 1.0
 
-                # Broadcast the transform
-                self.object_pos_tf.sendTransform(t)
-
-    # def _engage_fgp_callback(self, msg):
-    #     with self._engage_fgp_lock:
-    #         self.engage_fgp = msg.data
+            # Broadcast the transform
+            self.object_pos_tf.sendTransform(t)
 
 
-    def compute_observation(self):
+    def compute_fgp_observation(self):
 
         feedback_timed_out = False
 
+        with self._left_tcp_pose_sub_lock:
+            end = time.time()
+
+            left_tcp_pose = self.left_tcp_pose.clone()
+
+            if (end - self.left_tcp_pose_feedback_time) > (3. * self._publish_dt):
+                print('no feedback from left tcp pose')
+                feedback_timed_out = True
+        
+
+        with self._openarm_joint_position_lock:
+            end = time.time()
+
+            robot_q = self.robot_q[:, :7].clone()
+            gipper_q = self.robot_q[:, 14].unsqueeze(-1).clone()
+
+            if (end - self.openarm_feedback_time) > (3. * self._publish_dt):
+                print('no feedback from openarm joints')
+                feedback_timed_out = True
+
         state = torch.cat(
             (
-                self.robot_q[:, :7],
-                self.robot_q[:, 14].unsqueeze(-1),
-                self.left_tcp_pose,
+                robot_q,
+                gipper_q,
+                left_tcp_pose,
                 self.object_goal, 
                 self.last_actions,
             ),
             dim=-1
         )
 
-        # TODO: undo this
-        #state *= 0.
-
         # Copy camera image
         left_image = None
         with self._left_image_lock:
             end = time.time()
-            if (end - self.camera_left_feedback_time) > (3. * self._publish_dt): 
+            if (end - self.camera_left_feedback_time) > (3. * self._publish_dt * 2): 
                 print('no feedback from left camera')
                 feedback_timed_out = True
             left_image = torch.clone(self._left_image)
@@ -648,7 +632,7 @@ class DextrahFGPNode(Node):
         right_image = None
         with self._right_image_lock:
             end = time.time()
-            if (end - self.camera_right_feedback_time) > (3. * self._publish_dt): 
+            if (end - self.camera_right_feedback_time) > (3. * self._publish_dt * 2): 
                 print('no feedback from right camera')
                 feedback_timed_out = True
             right_image = torch.clone(self._right_image)
@@ -656,8 +640,8 @@ class DextrahFGPNode(Node):
         return state, left_image, right_image, feedback_timed_out
 
     def compute_actions(self, state, left_image, right_image, transmit=True, save_pth=False):
-#        with torch.no_grad():
-#            action_dict = self.dextrah_fgp.step(state, left_image, right_image)
+        # with torch.no_grad():
+        #     action_dict = self.dextrah_fgp.step(state, left_image, right_image)
 
         action_dict = self.dextrah_fgp.step_cuda_graph(state, left_image, right_image)
 
@@ -679,18 +663,25 @@ class DextrahFGPNode(Node):
 
         object_pos = action_dict["obj_pos"]
 
-        left_tcp_pos_targets = self.left_tcp_pose[:,:3] + actions[:,:3] * self.action_scale[0]
-        left_tcp_ori_targets = self.left_tcp_pose[:,3:6] + actions[:,3:6] * self.action_scale[1]
+        #print(object_pos)
 
+        left_tcp_pose = state[:, 8:14].clone()
+
+        left_tcp_pos_targets = left_tcp_pose[:,:3] + actions[:,:3] * self.action_scale[0]
+        left_tcp_ori_targets = left_tcp_pose[:,3:6] + actions[:,3:6] * self.action_scale[1]
+        
         left_tcp_pose_targets = torch.cat((left_tcp_pos_targets, left_tcp_ori_targets), dim=-1)
         left_tcp_pose_targets = torch.max(torch.min(left_tcp_pose_targets, self.tcp_pose_max), self.tcp_pose_min)
-
+       
         # euler → quaternion (w,x,y,z)
-        euler_np = left_tcp_pose_targets[0, 3:6].cpu().numpy()
-        tq = R.from_euler('XYZ', euler_np).as_quat()  # x,y,z,w (extrinsic XYZ)
+        euler_np = left_tcp_pose_targets[0, 3:6].cpu().detach().numpy()
+        euler_np[0]=euler_np[0]*-1.
+        euler_np[1]=euler_np[1]*1.
+        euler_np[2]=euler_np[2]*-1.
+        tq = R.from_euler('xyz', euler_np).as_quat() 
         target_quat = torch.tensor([[tq[3], tq[0], tq[1], tq[2]]], dtype=torch.float32, device=self.device)
         left_tcp_pose_targets = torch.cat((left_tcp_pose_targets[:, :3], target_quat), dim=-1)
-
+     
         left_gripper_action = 0.5 * (actions[:,6].clone() + 1.)
         left_gripper_pos_target = torch.where(left_gripper_action>0.5, self.action_scale[2], 0.)
 
@@ -723,7 +714,7 @@ class DextrahFGPNode(Node):
         feedback_timed_out = True
         for i in range(5):
             # Pack and prepare observations
-            state, left_image, right_image, feedback_timed_out = self.compute_observation()
+            state, left_image, right_image, feedback_timed_out = self.compute_fgp_observation()
 
             # Query the FGP for actions
             # NOTE: publisher callbacks will pull action data from tensors
@@ -750,6 +741,10 @@ class DextrahFGPNode(Node):
         print_iter = 60
         loop_time_filtered = 0.
 
+        # Publish init position once
+        self.publish_init_pos()
+        time.sleep(1.)
+
         # Burn in
         print('Burning in')
         self.burn_in()
@@ -761,7 +756,7 @@ class DextrahFGPNode(Node):
             start = time.time()
 
             # Pack and prepare observations
-            state, left_image, right_image, feedback_timed_out = self.compute_observation()
+            state, left_image, right_image, feedback_timed_out = self.compute_fgp_observation()
 
             #img_dict = {'left_img': left_image,
             #            'right_img': right_image}
@@ -778,12 +773,6 @@ class DextrahFGPNode(Node):
             else:
                 print('not computingn actions')
 
-            # # Reset hidden state if not engaging FGP
-            # with self._engage_fgp_lock:
-            #     if self.engage_fgp is False:
-            #         #print('resetting hidden state')
-            #         self.dextrah_fgp.reset_hidden_state()
-
             # Keep 60 Hz tick rate
             while (time.time() - start) < self._publish_dt:
                 time.sleep(.00001)
@@ -798,26 +787,7 @@ class DextrahFGPNode(Node):
             if (control_iter % print_iter) == 0:
                 print('avg control rate', 1./loop_time_filtered)
 
-            if self._save_images and (control_iter % self._save_interval) == 0:
-                self.save_images(control_iter)
-
             control_iter += 1
-
-    def save_images(self, control_iter: int):
-        with self._left_image_lock:
-            left = self._left_image
-        with self._right_image_lock:
-            right = self._right_image
-
-        ts = int(time.time() * 1000)
-        if left is not None:
-            img = (left[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-            cv2.imwrite(os.path.join(self._save_dir, f"{ts}_left_{control_iter:06d}.jpg"),
-                        cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-        if right is not None:
-            img = (right[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-            cv2.imwrite(os.path.join(self._save_dir, f"{ts}_right_{control_iter:06d}.jpg"),
-                        cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
     def test_spinning(self):
 
@@ -851,4 +821,3 @@ if __name__ == "__main__":
     rclpy.shutdown()
 
     print('DextrAH FGP closed.')
-

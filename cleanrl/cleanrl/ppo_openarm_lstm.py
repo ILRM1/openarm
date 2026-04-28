@@ -30,7 +30,7 @@ from cleanrl_utils.atari_wrappers import (  # isort:skip
 
 @dataclass
 class Args:
-    headless: bool = False
+    headless: bool = True
     """Whether to run the simulation in headless mode."""
     exp_name: str = os.path.basename(__file__)[: -len(".py")]
     """the name of this experiment"""
@@ -56,9 +56,9 @@ class Args:
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 32
+    num_envs: int = 1024
     """the number of parallel game environments"""
-    num_steps: int = 128
+    num_steps: int = 16
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = False
     """Toggle learning rate annealing for policy and value networks"""

@@ -89,12 +89,12 @@ class NetworkBuilder:
                 return GRUWithDones(input_size=input, hidden_size=units, num_layers=layers)
 
         def _build_sequential_mlp(self, 
-                                    input_size, 
-                                    units, 
-                                    activation,
-                                    dense_func,
-                                    norm_only_first_layer=False, 
-                                    norm_func_name = None):
+        input_size, 
+        units, 
+        activation,
+        dense_func,
+        norm_only_first_layer=False, 
+        norm_func_name = None):
             print('build mlp:', input_size)
             in_size = input_size
             layers = []
@@ -116,13 +116,13 @@ class NetworkBuilder:
             return nn.Sequential(*layers)
 
         def _build_mlp(self, 
-                        input_size, 
-                        units, 
-                        activation,
-                        dense_func, 
-                        norm_only_first_layer=False,
-                        norm_func_name = None,
-                        d2rl=False):
+        input_size, 
+        units, 
+        activation,
+        dense_func, 
+        norm_only_first_layer=False,
+        norm_func_name = None,
+        d2rl=False):
             if d2rl:
                 act_layers = [self.activations_factory.create(activation) for i in range(len(units))]
                 return D2RLNet(input_size, units, act_layers, norm_func_name)

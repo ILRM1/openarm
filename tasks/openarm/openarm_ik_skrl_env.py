@@ -44,25 +44,6 @@ from skrl.resources.preprocessors.torch import RunningStandardScaler
 from isaaclab_tasks.utils import load_cfg_from_registry
 
 from .openarm_env_cfg import OpenarmEnvCfg
-from .dextrah_kuka_allegro_utils import (
-    assert_equals,
-    scale,
-    compute_absolute_action,
-    to_torch
-)
-from .dextrah_kuka_allegro_constants import (
-    NUM_XYZ,
-    NUM_RPY,
-    NUM_QUAT,
-    NUM_HAND_PCA,
-    HAND_PCA_MINS,
-    HAND_PCA_MAXS,
-    PALM_POSE_MINS_FUNC,
-    PALM_POSE_MAXS_FUNC,
-#    TABLE_LENGTH_X,
-#    TABLE_LENGTH_Y,
-#    TABLE_LENGTH_Z,
-)
 
 # ADR imports
 from .dextrah_adr import DextrahADR
@@ -76,11 +57,11 @@ class SharedModel(GaussianMixin, DeterministicMixin, Model):
 
         # names must match checkpoint keys exactly
         self.net_container = nn.Sequential(
-            nn.Linear(obs_space, 64), nn.ELU(),
-            nn.Linear(64, 64), nn.ELU(),
+            nn.Linear(obs_space, 128), nn.ELU(),
+            nn.Linear(128, 128), nn.ELU(),
         )
-        self.policy_layer     = nn.Linear(64, self.action_space)
-        self.value_layer      = nn.Linear(64, 1)
+        self.policy_layer     = nn.Linear(128, self.action_space)
+        self.value_layer      = nn.Linear(128, 1)
         self.log_std_parameter = nn.Parameter(torch.zeros(act_space))
 
     def compute(self, inputs, role):
@@ -115,7 +96,7 @@ class OpenarmEnv(DirectRLEnv):
             device=self.device,
         )
 
-        self.ik_agent.load("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/cleanrl/runs/best_agent.pt")
+        self.ik_agent.load("/home/neubility-sim/isaac_ws/openarm_isaac_lab/logs/skrl/openarm_bi_reach/2026-04-26_19-02-53_ppo_torch/checkpoints/agent_240000.pt")
         self.ik_agent.set_running_mode("eval")
         self.ik_actions = torch.zeros((self.num_envs, 7), device=self.device)
         self.left_target_pose = torch.zeros((self.num_envs, 7), device=self.device)       
@@ -213,6 +194,13 @@ class OpenarmEnv(DirectRLEnv):
         
         self.robot_joint_pos_noise_width = torch.zeros(self.num_envs, 1, device=self.device)
         self.robot_joint_vel_noise_width = torch.zeros(self.num_envs, 1, device=self.device)
+
+        self.left_tcp_pos_bias_width = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_ori_bias_width = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_pos_bias = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_ori_bias = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_pos_noise_width = torch.zeros(self.num_envs, 1, device=self.device)
+        self.left_tcp_ori_noise_width = torch.zeros(self.num_envs, 1, device=self.device)
 
         # markers
         self.pred_pos_markers = VisualizationMarkers(
@@ -592,10 +580,12 @@ class OpenarmEnv(DirectRLEnv):
         left_target_ori = self.left_tcp_pose[:,3:6] + self.tcp_twist_targets[:,3:6]
 
         left_target_quat = quat_from_euler_xyz(left_target_ori[:, 0], left_target_ori[:, 1], left_target_ori[:, 2])
-        # left_angle = torch.norm(left_target_ori, dim=-1, keepdim=False)
-        # left_axis = left_target_ori / (left_angle.unsqueeze(-1) + 1e-8)
-        # left_target_quat = quat_from_angle_axis(left_angle, left_axis)
         self.left_target_pose = torch.cat((left_target_pos, left_target_quat), dim=-1).to(dtype=self.left_tcp_pose.dtype)
+
+        print(self.left_tcp_pose)
+        self.left_target_pose= torch.tensor([0.3,0.2,0.3, 3.14, 0., 0.], device=self.device).repeat((self.num_envs, 1))
+        left_tcp_euler = quat_from_euler_xyz(self.left_target_pose[:, 3], self.left_target_pose[:, 4], self.left_target_pose[:, 5])
+        self.left_target_pose = torch.cat((self.left_target_pose[:, :3], left_tcp_euler), dim=-1)
 
         with torch.inference_mode():
             ik_act_tuple = self.ik_agent.act(self.ik_observations(), timestep=0, timesteps=0)
@@ -674,6 +664,7 @@ class OpenarmEnv(DirectRLEnv):
             #     head_depth, size=(int(self.cfg.head_img_height/2), int(self.cfg.head_img_width/2)),
             #     mode='bilinear', align_corners=False,
             # )
+
             head_depth_flat = head_depth.reshape(head_depth.shape[0], -1)  # (N, 19200)
 
             wrist_L_depth = self.wrist_L_cam.data.output["depth"].clone()
@@ -689,6 +680,7 @@ class OpenarmEnv(DirectRLEnv):
 
             policy_with_depth = torch.cat([policy_obs, head_depth_flat, wrist_L_depth_flat], dim=-1)  # (N, 34+19200+19200=38434)
             #observations = {"policy": policy_obs, "critic": critic_obs}
+            
             observations = policy_with_depth
             
         else:
@@ -740,8 +732,8 @@ class OpenarmEnv(DirectRLEnv):
         total_reward = 0.01 * (hand_to_object_reward + lift_reward + close_gripper_reward).clamp(min=0.)
 
         #total_reward = torch.where(self.in_success_region, total_reward+0.3, total_reward)
-        total_reward = torch.where(self.out_of_joint_limit, 0., total_reward)
-
+        #total_reward = torch.where(self.out_of_joint_limit, 0., total_reward)
+       
         # Log other information
         self.extras["num_adr_increases"] = self.dextrah_adr.num_increments()
         self.extras["in_success_region"] = self.in_success_region.float().mean()
@@ -792,9 +784,9 @@ class OpenarmEnv(DirectRLEnv):
         # self.out_of_joint_limit = torch.where((self.robot_dof_pos[:,3] >= self.robot_dof_upper_limits[0, 3]) | 
         #                                  (self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]), True, False).any(dim=-1)
 
-        self.out_of_joint_limit = self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]
+        # self.out_of_joint_limit = self.robot_dof_pos[:,3] <= self.robot_dof_lower_limits[0, 3]
     
-        teriminated = out_of_reach | self.out_of_joint_limit
+        # teriminated = out_of_reach | self.out_of_joint_limit
         
         # Terminate rollout if maximum episode length reached
         if self.cfg.distillation:
@@ -805,8 +797,7 @@ class OpenarmEnv(DirectRLEnv):
         else:
             time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        #return out_of_reach, time_out
-        return teriminated, time_out
+        return out_of_reach, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:
@@ -986,6 +977,14 @@ class OpenarmEnv(DirectRLEnv):
         self.robot_joint_vel_noise_width[env_ids, 0] =\
             self.dextrah_adr.get_custom_param_value("robot_state_noise", "robot_joint_vel_noise") *\
             torch.rand(num_ids, device=self.device)
+
+
+        self.left_tcp_pos_bias_width[env_ids, 0] = 0.006 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_ori_bias_width[env_ids, 0] = 0.08 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_pos_bias[env_ids, 0] = self.left_tcp_pos_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
+        self.left_tcp_ori_bias[env_ids, 0] = self.left_tcp_ori_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
+        self.left_tcp_pos_noise_width[env_ids, 0] = 0.006 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_ori_noise_width[env_ids, 0] = 0.08 * torch.rand(num_ids, device=self.device)
 
 #        # Update whether to apply wrench for the episode
 #        self.apply_wrench = torch.where(
@@ -1210,6 +1209,9 @@ class OpenarmEnv(DirectRLEnv):
         # Data from robot--------------------------
         # Robot measured joint position and velocity
         self.left_gripper_joint_pos = self.robot.data.joint_pos[:, self.left_gripper_joint_id]
+        self.left_gripper_joint_pos_noisy = self.left_gripper_joint_pos + self.left_tcp_pos_noise_width[0][0]  *\
+         2. * (torch.rand_like(self.left_gripper_joint_pos) - 0.5) + self.left_tcp_pos_bias[0][0]
+       
         self.robot_dof_pos = self.robot.data.joint_pos[:, self.left_arm_joint_id]
         self.robot_dof_pos_noisy = self.robot_dof_pos +\
             self.robot_joint_pos_noise_width *\
@@ -1226,6 +1228,11 @@ class OpenarmEnv(DirectRLEnv):
             ,"coefficient"
         )
 
+        # self.left_tcp_pos_bias[env_ids, 0] = self.left_tcp_pos_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
+        # self.left_tcp_ori_bias[env_ids, 0] = self.left_tcp_ori_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
+        # self.left_tcp_pos_noise_width[env_ids, 0] = 0.006 * torch.rand(num_ids, device=self.device)
+        # self.left_tcp_ori_noise_width[env_ids, 0] = 0.08 * torch.rand(num_ids, device=self.device)
+
         self.left_tcp_vel = self.robot.data.body_link_vel_w[:, self.left_tcp_id]
         self.right_tcp_vel = self.robot.data.body_link_vel_w[:, self.right_tcp_id]
         
@@ -1233,13 +1240,17 @@ class OpenarmEnv(DirectRLEnv):
         self.right_tcp_pose = self.robot.data.body_pose_w[:, self.right_tcp_id]
         self.left_tcp_pose[:, :3] = self.left_tcp_pose[:, :3] - self.scene.env_origins
         self.right_tcp_pose[:, :3] = self.right_tcp_pose[:, :3] - self.scene.env_origins
-        
-        left_target_euler = torch.stack(euler_xyz_from_quat(self.left_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
-        #left_target_euler = axis_angle_from_quat(self.left_tcp_pose[:, 3:])
-        self.left_tcp_pose = torch.cat((self.left_tcp_pose[:, :3], left_target_euler), dim=-1)
 
-        right_target_euler = torch.stack(euler_xyz_from_quat(self.right_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
-        self.right_tcp_pose = torch.cat((self.right_tcp_pose[:, :3], right_target_euler), dim=-1)
+        left_tcp_pos_noisy = self.left_tcp_pose[:, :3] + self.left_tcp_pos_noise_width  * 2. * (torch.rand_like(self.left_tcp_pose[:, :3]) - 0.5) + self.left_tcp_pos_bias
+        
+        left_tcp_euler = torch.stack(euler_xyz_from_quat(self.left_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
+        left_tcp_euler_noisy = left_tcp_euler + self.left_tcp_ori_noise_width * 2. * (torch.rand_like(left_tcp_euler) - 0.5) + self.left_tcp_ori_bias
+
+        self.left_tcp_pose = torch.cat((self.left_tcp_pose[:, :3], left_tcp_euler), dim=-1)
+        self.left_tcp_pose_noisy = torch.cat((left_tcp_pos_noisy, left_tcp_euler_noisy), dim=-1)
+      
+        # right_target_euler = torch.stack(euler_xyz_from_quat(self.right_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
+        # self.right_tcp_pose = torch.cat((self.right_tcp_pose[:, :3], right_target_euler), dim=-1)
 
         # right_target_quat = quat_from_euler_xyz(self.right_tcp_pose[:, 3], self.right_tcp_pose[:, 4], self.right_tcp_pose[:, 5])
         # self.right_tcp_pose = torch.cat((self.right_tcp_pose[:,:3], right_target_quat), dim=-1).to(dtype=self.right_tcp_pose.dtype)
@@ -1302,37 +1313,17 @@ class OpenarmEnv(DirectRLEnv):
         # It is a max over the distances from points on hand to object
         self.hand_to_object_pos_error = torch.norm(self.left_tcp_pose[:,:3] - self.object_pos, dim=-1)
 
-        #self.hand_to_object_pos_error = torch.norm(self.left_tcp_pose[:,:3] - self.object_pos, dim=-1).max(dim=-1).values
-        
-    def compute_actions(self, actions: torch.Tensor) -> None: #torch.Tensor:
-        assert_equals(actions.shape, (self.num_envs, self.cfg.num_actions))
-
-        # Slice out the actions for the palm and the hand
-        twist_actions = actions[:, :6]
-
-        # In-place update to palm pose targets
-        self.tcp_twist_targets.copy_(
-            compute_absolute_action(
-                raw_actions=twist_actions,
-                lower_limits=self.palm_pose_lower_limits,
-                upper_limits=self.palm_pose_upper_limits,
-            )
-        )
-        self.tcp_twist_targets.copy_(twist_actions)
-
 
     def compute_student_policy_observations(self):
+        
         obs = torch.cat(
             (
                 # robot
-                self.robot_dof_pos_noisy, 
-                self.robot_dof_vel_noisy,
-                self.left_gripper_joint_pos.unsqueeze(-1),
-                self.left_tcp_pose[:, :3], 
-                self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], 
-                self.left_tcp_vel,
-                self.object_goal, 
-                self.actions, 
+                self.robot_dof_pos_noisy, #7
+                self.left_gripper_joint_pos_noisy.unsqueeze(-1), #1
+                self.left_tcp_pose_noisy,
+                self.object_goal, #3
+                self.actions, #7
             ),
             dim=-1,
         )
@@ -1467,21 +1458,6 @@ class OpenarmEnv(DirectRLEnv):
         # Write wrench data to sim
         self.object.write_data_to_sim()
 
-    
-    def compute_ik(self, ee_link_id, arm_joint_id):
-        # obtain quantities from simulation
-        jacobian = self.robot.root_physx_view.get_jacobians()[:, ee_link_id-1, :, arm_joint_id]
-        ee_pose_w = self.robot.data.body_pose_w[:, ee_link_id]
-        root_pose_w = self.robot.data.root_pose_w
-        joint_pos = self.robot.data.joint_pos[:, arm_joint_id]
-        # compute frame in root frame
-        ee_pos_b, ee_quat_b = subtract_frame_transforms(
-            root_pose_w[:, 0:3], root_pose_w[:, 3:7], ee_pose_w[:, 0:3], ee_pose_w[:, 3:7]
-        )
-        # compute the joint commands
-        joint_pos_des = self.diff_ik_controller.compute(ee_pos_b, ee_quat_b, jacobian, joint_pos)
-
-        return joint_pos_des
 
 @torch.jit.script
 def compute_rewards(

@@ -177,8 +177,8 @@ class Agent(nn.Module):
         # img_uint8 = (img_norm * 255).astype("uint8")
         # cv2.imwrite("depth_debug.png", img_uint8)
 
-        head_cnn_out = self._cnn_forward(head_depth/2., self.head_cnn, self.head_lns, self.head_pool, self.head_fc)
-        wrist_cnn_out = self._cnn_forward(wrist_L_depth/2., self.wrist_cnn, self.wrist_lns, self.wrist_pool, self.wrist_fc)
+        head_cnn_out = self._cnn_forward(head_depth, self.head_cnn, self.head_lns, self.head_pool, self.head_fc)
+        wrist_cnn_out = self._cnn_forward(wrist_L_depth, self.wrist_cnn, self.wrist_lns, self.wrist_pool, self.wrist_fc)
         hidden = torch.cat([head_cnn_out, wrist_cnn_out, proprio], dim=-1)
 
         # LSTM logic
@@ -303,7 +303,7 @@ class Dagger:
         #     num_cycles=self.num_cycles
         # )
         self.num_warmup_steps = 1000
-        self.num_iters = 100_000
+        self.num_iters = 100_000_000
 
         # load weights for student and teacher
         if self.config["student"]["ckpt"] is not None:
@@ -532,8 +532,8 @@ class Dagger:
                         obs["rgb"] = self.rgb_aug.apply(obs["rgb"], obs["mask"])
                         self.rgb_buffers[even_indices] = obs['rgb'][even_indices]
                         obs['rgb'] = self.rgb_buffers
-            else:
-                obs['img_right'] = torch.flip(obs['img_right'], dims=(2,3))
+            # else:
+            #     obs['img_right'] = torch.flip(obs['img_right'], dims=(2,3))
             
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 with torch.no_grad():
@@ -639,6 +639,7 @@ class Dagger:
                 stepping_actions = torch.zeros_like(actions_student["actions"])
                 student_inds = p > beta
                 teacher_inds = p <= beta
+
                 if torch.any(student_inds):
                     stepping_actions[student_inds] = actions_student["actions"][student_inds]
                 if torch.any(teacher_inds):

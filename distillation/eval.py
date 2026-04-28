@@ -119,11 +119,12 @@ def adjust_state_dict_keys(checkpoint_state_dict, model_state_dict):
     return adjusted_state_dict
 
 class PolicyEvaluator:
-    def __init__(self, env, config, checkpoint_path, save_dir=None, record_data=False, max_records_per_file=10, create_video=True):
+    def __init__(self, env, env_cfg, config, checkpoint_path, save_dir=None, record_data=False, max_records_per_file=10, create_video=True):
         self.env = env
+        self.env_cfg = env_cfg
         self.ov_env = env.env
         self.num_envs = self.ov_env.num_envs
-        self.num_actions = self.ov_env.num_actions
+        self.num_actions = self.env_cfg.num_actions
         self.device = torch.device("cuda:0")
         self.config = config
         self.checkpoint_path = checkpoint_path
@@ -136,7 +137,7 @@ class PolicyEvaluator:
                 num_envs=self.num_envs,
                 img_height=self.ov_env.cfg.img_height,
                 img_width=self.ov_env.cfg.img_width,
-                stereo=self.ov_env.simulate_stereo,
+                stereo=self.env_cfg.simulate_stereo,
                 max_records_per_file=max_records_per_file,
                 create_video=create_video
             )
@@ -189,7 +190,7 @@ class PolicyEvaluator:
         self.success_rates = []
         
         # Initialize observation buffers
-        if self.ov_env.simulate_stereo:
+        if self.env_cfg.simulate_stereo:
             self.rgb_buffers_left = torch.zeros(
                 (self.num_envs, 3, self.ov_env.cfg.img_height, self.ov_env.cfg.img_width)
             ).to(self.device)
@@ -215,7 +216,7 @@ class PolicyEvaluator:
         self.rgb_aug = RgbAug(
             device=self.device,
             all_env_inds=self.ov_env.robot._ALL_INDICES,
-            use_stereo=self.ov_env.simulate_stereo,
+            use_stereo=self.env_cfg.simulate_stereo,
             background_cfg={
                 "dir": os.path.join(
                     str(pathlib.Path(__file__).parent.parent.resolve()),
@@ -274,7 +275,7 @@ class PolicyEvaluator:
         # Handle image observations
         even_indices = torch.where(self.env_counter % 2 == 0)[0]
         
-        if self.ov_env.simulate_stereo:
+        if self.env_cfg.simulate_stereo:
             # Handle stereo images exactly as in distillation.py
             imgs = {
                 "left_img": obs["img_left"],
@@ -291,7 +292,7 @@ class PolicyEvaluator:
             
             self.rgb_buffers_left[even_indices] = obs['img_left'][even_indices]
             obs['img_left'] = self.rgb_buffers_left
-            obs['img_right'] = torch.flip(obs['img_right'], dims=(2,3))  # Flip right image
+            #obs['img_right'] = torch.flip(obs['img_right'], dims=(2,3))  # Flip right image
             self.rgb_buffers_right[even_indices] = obs['img_right'][even_indices]
             obs['img_right'] = self.rgb_buffers_right
         else:
@@ -306,7 +307,7 @@ class PolicyEvaluator:
             "obs": obs[self.config["student"]["obs_type"]],
             "prev_actions": self.prev_actions,
         }
-    
+        
         # Add image observations if they exist
         if "img" in obs:
             batch_dict["img"] = obs["img"]
@@ -394,7 +395,7 @@ class PolicyEvaluator:
                     
                     # Reset image buffers for done environments if using RGB augmentation
                     if hasattr(self, 'rgb_buffers'):
-                        if self.ov_env.simulate_stereo:
+                        if self.env_cfg.simulate_stereo:
                             self.rgb_buffers_left[all_done_indices] = 0
                             self.rgb_buffers_right[all_done_indices] = 0
                         else:
@@ -458,7 +459,7 @@ def main(env_cfg, agent_cfg: dict):
     parent_path = str(pathlib.Path(__file__).parent.parent.parent.resolve())
     agent_cfg_folder = "dextrah_lab/tasks/dextrah_kuka_allegro/agents"
     
-    if env.env.simulate_stereo:
+    if env_cfg.simulate_stereo:
         student_cfg = os.path.join(
             parent_path,
             agent_cfg_folder,
@@ -491,6 +492,7 @@ def main(env_cfg, agent_cfg: dict):
     
     evaluator = PolicyEvaluator(
         env=env,
+        env_cfg=env_cfg,
         config=config,
         checkpoint_path=args_cli.checkpoint,
         save_dir=args_cli.save_dir,

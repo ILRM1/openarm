@@ -3,12 +3,12 @@
 """
 RUN
 
- LIVESTREAM=2 ENABLE_CAMERAS=1 python run_distillation.py \
+ LIVESTREAM=2 ENABLE_CAMERAS=1 CUDA_VISIBLE_DEVICES=0 python run_distillation.py \
             --headless \
             --task=Openarm \
             --num_envs 256 env.distillation=True \
             --enable_cameras env.simulate_stereo=True \
-            --teacher /home/namyeong/openarm/dextrah_lab/cleanrl/runs/Openarm__ppo_openarm_lstm__1__1776261499/ppo_openarm_lstm_step163840000.pth  \
+            --teacher /home/namyeong/openarm/dextrah_lab/cleanrl/runs/ppo_openarm_lstm_step2041446400.pth  \
             env.img_aug_type="rgb" \
             env.aux_coeff=10.
 

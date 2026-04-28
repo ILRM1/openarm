@@ -38,25 +38,7 @@ from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_euler_xyz, euler_xyz_from_quat
 
 from .openarm_env_cfg import OpenarmEnvCfg
-from .dextrah_kuka_allegro_utils import (
-    assert_equals,
-    scale,
-    compute_absolute_action,
-    to_torch
-)
-from .dextrah_kuka_allegro_constants import (
-    NUM_XYZ,
-    NUM_RPY,
-    NUM_QUAT,
-    NUM_HAND_PCA,
-    HAND_PCA_MINS,
-    HAND_PCA_MAXS,
-    PALM_POSE_MINS_FUNC,
-    PALM_POSE_MAXS_FUNC,
-#    TABLE_LENGTH_X,
-#    TABLE_LENGTH_Y,
-#    TABLE_LENGTH_Z,
-)
+
 
 # ADR imports
 from .dextrah_adr import DextrahADR
@@ -644,6 +626,7 @@ class OpenarmEnv(DirectRLEnv):
 
             policy_with_depth = torch.cat([policy_obs, head_depth_flat, wrist_L_depth_flat], dim=-1)  # (N, 34+19200+19200=38434)
             #observations = {"policy": policy_obs, "critic": critic_obs}
+            
             observations = policy_with_depth
             
         else:
@@ -1207,10 +1190,10 @@ class OpenarmEnv(DirectRLEnv):
         
         left_tcp_euler = torch.stack(euler_xyz_from_quat(self.left_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
         left_tcp_euler_noisy = left_tcp_euler + self.left_tcp_ori_noise_width * 2. * (torch.rand_like(left_tcp_euler) - 0.5) + self.left_tcp_ori_bias
-
+       
         self.left_tcp_pose = torch.cat((self.left_tcp_pose[:, :3], left_tcp_euler), dim=-1)
         self.left_tcp_pose_noisy = torch.cat((left_tcp_pos_noisy, left_tcp_euler_noisy), dim=-1)
-
+      
         # right_target_euler = torch.stack(euler_xyz_from_quat(self.right_tcp_pose[:, 3:], wrap_to_2pi = False), dim=-1)
         # self.right_tcp_pose = torch.cat((self.right_tcp_pose[:, :3], right_target_euler), dim=-1)
 
@@ -1320,11 +1303,11 @@ class OpenarmEnv(DirectRLEnv):
         obs = torch.cat(
             (
                 # robot
-                self.robot_dof_pos_noisy, 
-                self.left_gripper_joint_pos_noisy.unsqueeze(-1), 
+                self.robot_dof_pos_noisy, #7
+                self.left_gripper_joint_pos_noisy.unsqueeze(-1), #1
                 self.left_tcp_pose_noisy,
-                self.object_goal, 
-                self.actions, 
+                self.object_goal, #3
+                self.actions, #7
             ),
             dim=-1,
         )
