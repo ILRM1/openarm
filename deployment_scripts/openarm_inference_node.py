@@ -246,7 +246,7 @@ class DextrahFGPNode(Node):
         self.action_scale = (0.02, 0.1, 0.044)
         self.tcp_pose_min = torch.tensor([0.05, 0., 0.21, -np.pi*2, -np.pi*2, -np.pi*2], device=self.device)
         self.tcp_pose_max = torch.tensor([0.45, 0.4, 0.35, np.pi*2, np.pi*2, np.pi*2], device=self.device)
-        self.student_ckpt = "distillation/runs/dextrah_student_100000_iters.pth"
+        self.student_ckpt = "distillation/runs/dextrah_student_20000_iters.pth"
 
         # For converting ROS image messages to CV formates
         self.bridge = CvBridge()

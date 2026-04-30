@@ -17,9 +17,6 @@ import torch
 URDF_PATH       = "/home/neubility-sim/isaac_ws/openarm_description/urdf/robot/openarm_bimanual.urdf"
 EE_FRAME        = "openarm_left_hand_tcp"
 JOINT_NAMES     = [f"openarm_left_joint{i}" for i in range(1, 8)]
-IK_METHOD       = "dls"
-MIN_SINGULAR    = 0.1
-K_VAL = 1.
 LAMBDA_VAL = 0.01
 POSITION_ONLY   = False
 CONTROL_RATE    = 60.0      # Hz
@@ -119,7 +116,6 @@ def compute(ee_pos: torch.Tensor, ee_quat: torch.Tensor,
     delta_joint_pos = _compute_delta_joint_pos(delta_pose=pose_error, jacobian=jacobian)
 
     return joint_pos + delta_joint_pos
-
 
 
 # ─────────────────────────────────────────

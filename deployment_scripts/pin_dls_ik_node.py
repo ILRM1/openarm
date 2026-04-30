@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import math
 from threading import Lock
 from typing import Optional
 
@@ -13,73 +12,67 @@ from sensor_msgs.msg import JointState
 # ─────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────
-URDF_PATH       = "/home/neubility-sim/openarm_ros2_ws/src/openarm_description/urdf/robot/openarm_bimanual.urdf"
-EE_FRAME        = "openarm_left_hand_tcp"
-JOINT_NAMES     = [f"openarm_left_joint{i}" for i in range(1, 8)]
-IK_METHOD       = "dls"
-MIN_SINGULAR    = 0.1
-K_VAL = 1.
-LAMBDA_VAL = 0.01
-MAX_DELTA_Q = 0.5   # rad per control step
-POSITION_ONLY   = False
-CONTROL_RATE    = 10.0      # Hz
+URDF_PATH           = "/home/neubility-sim/isaac_ws/openarm_description/urdf/robot/openarm_bimanual.urdf"
+EE_FRAME            = "openarm_left_hand_tcp"
+JOINT_NAMES         = [f"openarm_left_joint{i}" for i in range(1, 8)]
+LAMBDA_VAL          = 0.01
+POSITION_ONLY       = False
+CONTROL_RATE        = 60.0      # Hz
 
-JOINT_STATE_TOPIC  = "/joint_states"
-TARGET_POSE_TOPIC  = "/left/ik_target_pose"
-PUBLISH_TOPIC      = "/arm/command"
-
+JOINT_STATE_TOPIC   = "/joint_states"
+TARGET_POSE_TOPIC   = "/left/ik_target_pose"
+GRIPPER_TOPIC       = "/left/gripper_command"
+PUBLISH_TOPIC       = "/arm/command"
+GRIPPER_JOINT_NAME  = "openarm_left_finger_joint1"
 
 # ─────────────────────────────────────────
-# Quaternion helpers
+# IK solver (numpy)
 # ─────────────────────────────────────────
-def quat_xyzw_to_wxyz(q: np.ndarray) -> np.ndarray:
-    return np.array([q[3], q[0], q[1], q[2]], dtype=np.float64)
+def quat_conjugate(q: np.ndarray) -> np.ndarray:
+    """q = [w, x, y, z]"""
+    return np.array([q[0], -q[1], -q[2], -q[3]])
 
-def normalize(q: np.ndarray) -> np.ndarray:
-    n = np.linalg.norm(q)
-    return q / n if n > 1e-12 else np.array([1., 0., 0., 0.])
 
-def quat_error_axis_angle(cur_wxyz: np.ndarray, tgt_wxyz: np.ndarray) -> np.ndarray:
-    qc = normalize(cur_wxyz)
-    qt = normalize(tgt_wxyz)
-
-    # q_err = q_target * conj(q_current)
-    w1, x1, y1, z1 = qt
-    w2, x2, y2, z2 = qc[0], -qc[1], -qc[2], -qc[3]
-
-    q_err = normalize(np.array([
+def quat_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Hamilton product, q = [w, x, y, z]"""
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    return np.array([
         w1*w2 - x1*x2 - y1*y2 - z1*z2,
         w1*x2 + x1*w2 + y1*z2 - z1*y2,
         w1*y2 - x1*z2 + y1*w2 + z1*x2,
         w1*z2 + x1*y2 - y1*x2 + z1*w2,
-    ], dtype=np.float64))
-
-    # shortest path
-    if q_err[0] < 0.0:
-        q_err = -q_err
-
-    w = np.clip(q_err[0], -1.0, 1.0)
-    v = q_err[1:]
-    v_norm = np.linalg.norm(v)
-
-    if v_norm < 1e-9:
-        return np.zeros(3, dtype=np.float64)
-
-    angle = 2.0 * math.atan2(v_norm, w)
-
-    # angle을 [-pi, pi] 범위로 정리
-    if angle > math.pi:
-        angle -= 2.0 * math.pi
-
-    return v / v_norm * angle
+    ])
 
 
-# ─────────────────────────────────────────
-# IK solver (numpy only)
-# ─────────────────────────────────────────
-def solve_ik_dls(jacobian: np.ndarray, delta_x: np.ndarray, lam: float = 0.01) -> np.ndarray:
-    m = jacobian.shape[0]
-    return jacobian.T @ np.linalg.solve(jacobian @ jacobian.T + lam**2 * np.eye(m), delta_x)
+def axis_angle_from_quat(q: np.ndarray, eps: float = 1e-6) -> np.ndarray:
+    """q = [w, x, y, z] → axis-angle (3,)"""
+    if q[0] < 0:
+        q = -q
+    mag = np.linalg.norm(q[1:])
+    half_angle = np.arctan2(mag, q[0])
+    angle = 2.0 * half_angle
+    s = np.sin(half_angle) / angle if abs(angle) > eps else 0.5 - angle * angle / 48.0
+    return q[1:4] / s
+
+
+def compute_pose_error(
+    pos_cur: np.ndarray, quat_cur: np.ndarray,
+    pos_des: np.ndarray, quat_des: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    norm_sq = np.dot(quat_cur, quat_cur)
+    quat_inv = quat_conjugate(quat_cur) / norm_sq
+    quat_err = quat_mul(quat_des, quat_inv)
+    pos_err = pos_des - pos_cur
+    aa_err = axis_angle_from_quat(quat_err)
+    return pos_err, aa_err
+
+
+def compute_dls(pose_error: np.ndarray, jacobian: np.ndarray) -> np.ndarray:
+    """Δq = J^T (J J^T + λ²I)^{-1} Δx"""
+    JT = jacobian.T
+    lam2_I = (LAMBDA_VAL ** 2) * np.eye(jacobian.shape[0])
+    return JT @ np.linalg.solve(jacobian @ JT + lam2_I, pose_error)
 
 
 # ─────────────────────────────────────────
@@ -91,32 +84,35 @@ class DifferentialIKNode(Node):
 
         # Pinocchio model
         self.model = pin.buildModelFromUrdf(URDF_PATH)
-        self.data  = self.model.createData()
+        self.data = self.model.createData()
+        self.frame_id = self.model.getFrameId(EE_FRAME)
 
-        if not self.model.existFrame(EE_FRAME):
-            raise ValueError(f"EE frame '{EE_FRAME}' not found in URDF")
-        self.ee_frame_id = self.model.getFrameId(EE_FRAME)
-
-        self.joint_q_idx = []
-        self.joint_v_idx = []
+        # Map JOINT_NAMES → velocity/configuration indices in full model
+        self.q_indices = []
+        self.v_indices = []
         for name in JOINT_NAMES:
             jid = self.model.getJointId(name)
-            self.joint_q_idx.append(self.model.joints[jid].idx_q)
-            self.joint_v_idx.append(self.model.joints[jid].idx_v)
+            jnt = self.model.joints[jid]
+            self.q_indices.extend(range(jnt.idx_q, jnt.idx_q + jnt.nq))
+            self.v_indices.extend(range(jnt.idx_v, jnt.idx_v + jnt.nv))
 
         # State
         self._lock = Lock()
         self.latest_joint_state: Optional[JointState] = None
         self.latest_target_pose: Optional[PoseStamped] = None
-        self.name_to_idx = {}
+        self.latest_gripper_pos: float = 0.0
+        self.name_to_idx: dict = {}
 
         # ROS2
         self.create_subscription(JointState, JOINT_STATE_TOPIC, self._joint_cb, 10)
         self.create_subscription(PoseStamped, TARGET_POSE_TOPIC, self._target_cb, 10)
+        self.create_subscription(JointState, GRIPPER_TOPIC, self._gripper_cb, 10)
         self.pub = self.create_publisher(JointState, PUBLISH_TOPIC, 10)
         self.create_timer(1.0 / CONTROL_RATE, self._control_loop)
 
-        self.get_logger().info(f"DifferentialIK started | EE: {EE_FRAME} | joints: {JOINT_NAMES}")
+        self.get_logger().info(
+            f"DifferentialIK (pinocchio) started | EE: {EE_FRAME} | joints: {JOINT_NAMES}"
+        )
 
     def _joint_cb(self, msg: JointState):
         with self._lock:
@@ -127,6 +123,11 @@ class DifferentialIKNode(Node):
         with self._lock:
             self.latest_target_pose = msg
 
+    def _gripper_cb(self, msg: JointState):
+        with self._lock:
+            if msg.position:
+                self.latest_gripper_pos = msg.position[0]
+
     def _control_loop(self):
         with self._lock:
             js  = self.latest_joint_state
@@ -136,60 +137,48 @@ class DifferentialIKNode(Node):
         if js is None or tgt is None:
             return
 
-        try:
-            # Build full q
-            q = pin.neutral(self.model)
-            q_ctrl = np.zeros(len(JOINT_NAMES))
-            for i, (name, qi) in enumerate(zip(JOINT_NAMES, self.joint_q_idx)):
-                val = js.position[n2i[name]]
-                q[qi] = val
-                q_ctrl[i] = val
+        # Current joint angles (7,)
+        q_ctrl = np.array([js.position[n2i[name]] for name in JOINT_NAMES])
 
-            # Forward kinematics + Jacobian
-            pin.forwardKinematics(self.model, self.data, q)
-            pin.updateFramePlacements(self.model, self.data)
+        # Build full pinocchio q (neutral for joints not in JOINT_NAMES)
+        q = pin.neutral(self.model)
+        for i, qi in enumerate(self.q_indices):
+            q[qi] = q_ctrl[i]
 
-            frame = self.data.oMf[self.ee_frame_id]
-            ee_pos     = frame.translation.copy()
-            ee_quat    = quat_xyzw_to_wxyz(pin.Quaternion(frame.rotation).coeffs().copy())
-            
-            J6 = pin.computeFrameJacobian(
-                self.model, self.data, q,
-                self.ee_frame_id, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED
-            )
-            J = J6[:, self.joint_v_idx]
+        # FK + Jacobian
+        pin.forwardKinematics(self.model, self.data, q)
+        pin.updateFramePlacements(self.model, self.data)
 
-            # Target
-            p = tgt.pose
-            tgt_pos  = np.array([p.position.x, p.position.y, p.position.z])
-            tgt_quat = normalize(np.array([
-                p.orientation.w, p.orientation.x, p.orientation.y, p.orientation.z
-            ]))
-            
-            # IK
-            pos_err = tgt_pos - ee_pos
-            rot_err = quat_error_axis_angle(ee_quat, tgt_quat)
-            delta_x = np.concatenate([pos_err, rot_err]) if not POSITION_ONLY else pos_err
+        T = self.data.oMf[self.frame_id]
+        ee_pos = T.translation.copy()
+        pq = pin.Quaternion(T.rotation)
+        ee_quat = np.array([pq.w, pq.x, pq.y, pq.z])  # wxyz
 
-            #pos_err = np.clip(pos_err, -0.02, 0.02)
-            #rot_err = np.clip(rot_err, -0.06, 0.06)
-            delta_x = K_VAL * np.concatenate([pos_err, 0.3 * rot_err])
+        J_full = pin.computeFrameJacobian(
+            self.model, self.data, q, self.frame_id, pin.LOCAL_WORLD_ALIGNED
+        )
+        J = J_full[:, self.v_indices]   # (6, 7)
+        if POSITION_ONLY:
+            J = J[:3, :]
 
-            J_use   = J if not POSITION_ONLY else J[:3]
+        # Target pose
+        p = tgt.pose
+        tgt_pos  = np.array([p.position.x, p.position.y, p.position.z])
+        tgt_quat = np.array([p.orientation.w, p.orientation.x, p.orientation.y, p.orientation.z])
 
-            delta_q = solve_ik_dls(J_use, delta_x, LAMBDA_VAL)
-            delta_q = np.clip(delta_q, -MAX_DELTA_Q, MAX_DELTA_Q)
-            q_cmd   = q_ctrl + delta_q
+        # Pose error → DLS → new joint command
+        pos_err, aa_err = compute_pose_error(ee_pos, ee_quat, tgt_pos, tgt_quat)
+        pose_error = np.concatenate([pos_err, aa_err]) if not POSITION_ONLY else pos_err
+        q_cmd = q_ctrl + compute_dls(pose_error, J)
 
-            # Publish
-            out = JointState()
-            out.header.stamp = self.get_clock().now().to_msg()
-            out.name     = JOINT_NAMES
-            out.position = q_cmd.tolist()
-            self.pub.publish(out)
-
-        except Exception as e:
-            self.get_logger().error(f"IK error: {e}")
+        # Publish
+        with self._lock:
+            gripper_pos = self.latest_gripper_pos
+        out = JointState()
+        out.header.stamp = self.get_clock().now().to_msg()
+        out.name     = JOINT_NAMES + [GRIPPER_JOINT_NAME]
+        out.position = q_cmd.tolist() + [gripper_pos]
+        self.pub.publish(out)
 
 
 def main():
