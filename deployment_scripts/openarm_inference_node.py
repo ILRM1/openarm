@@ -13,6 +13,7 @@ from geometry_msgs.msg import PoseStamped, TransformStamped
 from sensor_msgs.msg import JointState, Image
 from tf2_ros import TransformBroadcaster
 from std_msgs.msg import Bool
+from rclpy.qos import qos_profile_sensor_data
 
 # Third party
 import torch
@@ -243,8 +244,8 @@ class DextrahFGPNode(Node):
         self.batch_size = 1
         self.num_actions = 7
         self.num_obs = 24
-        self.action_scale = (0.02, 0.1, 0.044)
-        self.tcp_pose_min = torch.tensor([0.05, 0., 0.21, -np.pi*2, -np.pi*2, -np.pi*2], device=self.device)
+        self.action_scale = (0.02, 0.1, 1.)
+        self.tcp_pose_min = torch.tensor([0.05, 0., 0.22, -np.pi*2, -np.pi*2, -np.pi*2], device=self.device)
         self.tcp_pose_max = torch.tensor([0.45, 0.4, 0.35, np.pi*2, np.pi*2, np.pi*2], device=self.device)
         self.student_ckpt = "distillation/runs/dextrah_student_20000_iters.pth"
 
@@ -256,16 +257,16 @@ class DextrahFGPNode(Node):
         self._right_image_lock = Lock()
         self._left_image = None
         self._right_image = None
-        self._image_height = 192
-        self._image_width = 240 
+        self._image_height = 384
+        self._image_width = 480 
 
         # NOTE: expecting 1/2 the resolution
-        self._downsample_factor = 1
+        self._downsample_factor = 2
         self.camera_left_feedback_time = time.time()
-        self.camera_left_sub = self.create_subscription(Image, '/camera/image', self._left_camera_callback, 10)
+        self.camera_left_sub = self.create_subscription(Image, '/camera/image', self._left_camera_callback, qos_profile_sensor_data)
 
         self.camera_right_feedback_time = time.time()
-        self.camera_right_sub = self.create_subscription(Image, '/wristcam_left/image',self._right_camera_callback,10)
+        self.camera_right_sub = self.create_subscription(Image, '/wristcam_left/image',self._right_camera_callback, qos_profile_sensor_data)
 
         # Robot subscribers
         self.robot_q = torch.zeros(self.batch_size, 16, device=self.device)
@@ -278,11 +279,11 @@ class DextrahFGPNode(Node):
         self._openarm_sub = self.create_subscription(JointState(), '/joint_states', self._openarm_sub_callback, 1)
         self._tcp_pose_sub = self.create_subscription(PoseStamped(), '/tcp_pose/left', self._tcp_pose_sub_callback, 1)
 
-        self._publish_rate = 60. # Hz
+        self._publish_rate = 10. # Hz
         self._publish_dt = 1./self._publish_rate # s
 
         # Goal to bring object to. NOTE: this should be a command in the future
-        self.object_goal = torch.tensor([0.25, 0.15, 0.29], device=self.device).repeat((self.batch_size, 1))
+        self.object_goal = torch.tensor([0.25, 0.15, 0.3], device=self.device).repeat((self.batch_size, 1))
 
         self.last_actions = torch.zeros(self.batch_size, self.num_actions, device=self.device)
 
@@ -509,18 +510,7 @@ class DextrahFGPNode(Node):
             self._gripper_pos_command_pub.publish(msg)
 
     def publish_init_pos(self):
-        msg = JointState()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.name = [
-            'openarm_left_joint1',  
-            'openarm_left_joint2',  
-            'openarm_left_joint3',  
-            'openarm_left_joint4',  
-            'openarm_left_joint5',  
-            'openarm_left_joint6',  
-            'openarm_left_joint7',  
-            'openarm_left_finger_joint1', 
-
+        joint_names = [
             'openarm_right_joint1',
             'openarm_right_joint2',
             'openarm_right_joint3',
@@ -529,12 +519,39 @@ class DextrahFGPNode(Node):
             'openarm_right_joint6',
             'openarm_right_joint7',
             'openarm_right_finger_joint1',
+            'openarm_left_joint1',
+            'openarm_left_joint2',
+            'openarm_left_joint3',
+            'openarm_left_joint4',
+            'openarm_left_joint5',
+            'openarm_left_joint6',
+            'openarm_left_joint7',
+            'openarm_left_finger_joint1',
         ]
-        msg.position = [0.9, -0.35, -0.24, 2.0, -0.54, 0., 1.1, 0.044, 
-                        -0.9, 0.35, 0.24, 2.0, 0.54, 0., -1.1, 0.044]
-        msg.velocity = []
-        msg.effort = []
-        self._arm_init_pub.publish(msg)
+        target = [-0.9, 0.35, 0.24, 2.0, 0.54, 0., -1.1, 1.,
+                  0.9, -0.35, -0.24, 2.0, -0.54, 0., 1.1, 1.]
+        
+        # robot_q layout: [left_joints(0-6), right_joints(7-13), left_finger(14), right_finger(15)]
+        # msg.position layout: [left_joints(0-6), left_finger(7), right_joints(8-14), right_finger(15)]
+        with self._openarm_joint_position_lock:
+            q = self.robot_q[0].cpu().numpy()
+        current = [q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[14],
+                   q[7], q[8], q[9], q[10], q[11], q[12], q[13], q[15]]
+
+        num_steps = 100
+        for step in range(1, num_steps + 1):
+            alpha = step / num_steps
+            interp = [c + alpha * (t - c) for c, t in zip(current, target)]
+
+            msg = JointState()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.name = joint_names
+            msg.position = interp
+            msg.velocity = []
+            msg.effort = []
+            self._arm_init_pub.publish(msg)
+            time.sleep(0.05)
+
         self.get_logger().info('Published init position')
 
     def _object_pos_callback(self):
@@ -603,7 +620,7 @@ class DextrahFGPNode(Node):
             end = time.time()
 
             robot_q = self.robot_q[:, :7].clone()
-            gipper_q = self.robot_q[:, 14].unsqueeze(-1).clone()
+            gipper_q = self.robot_q[:, 14].unsqueeze(-1).clone().abs()*0.044
 
             if (end - self.openarm_feedback_time) > (3. * self._publish_dt):
                 print('no feedback from openarm joints')
@@ -668,19 +685,24 @@ class DextrahFGPNode(Node):
         left_tcp_pose = state[:, 8:14].clone()
 
         left_tcp_pos_targets = left_tcp_pose[:,:3] + actions[:,:3] * self.action_scale[0]
-        left_tcp_ori_targets = left_tcp_pose[:,3:6] + actions[:,3:6] * self.action_scale[1]
-        
-        left_tcp_pose_targets = torch.cat((left_tcp_pos_targets, left_tcp_ori_targets), dim=-1)
-        left_tcp_pose_targets = torch.max(torch.min(left_tcp_pose_targets, self.tcp_pose_max), self.tcp_pose_min)
-       
-        # euler → quaternion (w,x,y,z)
-        euler_np = left_tcp_pose_targets[0, 3:6].cpu().detach().numpy()
-        euler_np[0]=euler_np[0]*-1.
-        euler_np[1]=euler_np[1]*1.
-        euler_np[2]=euler_np[2]*-1.
-        tq = R.from_euler('xyz', euler_np).as_quat() 
+        left_tcp_pos_targets = torch.max(torch.min(left_tcp_pos_targets, self.tcp_pose_max[:3]), self.tcp_pose_min[:3])
+
+        # 시뮬과 동일: axis-angle delta → quat_mul(delta, curr)
+        euler_np = left_tcp_pose[0, 3:6].cpu().detach().numpy()
+        euler_corrected = euler_np.copy()
+        euler_corrected[0] *= -1.
+        euler_corrected[2] *= -1.
+        curr_rot = R.from_euler('xyz', euler_corrected)
+
+        delta_rotvec = (actions[0, 3:6] * self.action_scale[1]).cpu().detach().numpy()
+        delta_rot = R.from_rotvec(delta_rotvec)
+        target_rot = delta_rot * curr_rot
+        tq = target_rot.as_quat()  # xyzw
         target_quat = torch.tensor([[tq[3], tq[0], tq[1], tq[2]]], dtype=torch.float32, device=self.device)
-        left_tcp_pose_targets = torch.cat((left_tcp_pose_targets[:, :3], target_quat), dim=-1)
+        
+        left_tcp_pose_targets = torch.cat((left_tcp_pos_targets, target_quat), dim=-1)
+
+        #left_tcp_pose_targets[:,:3] = torch.tensor([[0.3, 0.2, 0.29]], dtype=torch.float32, device=self.device)
      
         left_gripper_action = 0.5 * (actions[:,6].clone() + 1.)
         left_gripper_pos_target = torch.where(left_gripper_action>0.5, self.action_scale[2], 0.)

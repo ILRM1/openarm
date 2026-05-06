@@ -34,7 +34,7 @@ class Args:
     """Whether to run the simulation in headless mode."""
     exp_name: str = os.path.basename(__file__)[: -len(".py")]
     """the name of this experiment"""
-    seed: int = 1
+    seed: int = 42
     """seed of the experiment"""
     torch_deterministic: bool = True
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
@@ -87,13 +87,13 @@ class Args:
 
     save_model: bool = True
     """whether to save the model at the end of training"""
-    save_interval: int = 200
+    save_interval: int = 500
     """save model every N updates (0 = only at the end)"""
     video: bool = True
     """whether to record videos during training"""
     video_length: int = 1000
     """length of the recorded video (in steps)"""
-    video_interval: int = 20000
+    video_interval: int = 2000
     """interval between video recordings (in steps)"""
     resume_path: str = ""
     """path to checkpoint .pth file to resume training from"""
@@ -156,10 +156,10 @@ class Agent(nn.Module):
         self.head_cnn, self.head_lns, self.head_pool = self._make_cnn()
         self.wrist_cnn, self.wrist_lns, self.wrist_pool = self._make_cnn()
 
-        self.head_fc = nn.Linear(256, 32)
-        self.wrist_fc = nn.Linear(256, 32)
-
+        self.head_fc = nn.Linear(128, 32)
+        self.wrist_fc = nn.Linear(128, 32)
         self.lstm = nn.LSTM(32 + 32 + self.proprio_dim, 1024, num_layers=2)
+        
         for name, param in self.lstm.named_parameters():
             if "bias" in name:
                 nn.init.constant_(param, 0)
@@ -194,7 +194,8 @@ class Agent(nn.Module):
     def _cnn_forward(self, x, convs, lns, pool, fc):
         for conv, ln in zip(convs, lns):
             x = F.relu(ln(conv(x)))
-        
+       
+        x= pool(x)
         x = x.flatten(1)
         x = fc(x)
 
@@ -331,6 +332,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
     env_cfg.use_depth_teacher = True
+    env_cfg.seed = args.seed
 
     envs = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args.video else None)
     if args.video:

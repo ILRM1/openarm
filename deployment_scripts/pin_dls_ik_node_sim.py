@@ -14,10 +14,7 @@ from sensor_msgs.msg import JointState
 # ─────────────────────────────────────────
 URDF_PATH           = "/home/neubility-sim/isaac_ws/openarm_description/urdf/robot/openarm_bimanual.urdf"
 EE_FRAME            = "openarm_left_hand_tcp"
-LEFT_JOINT_NAMES    = [f"openarm_left_joint{i}" for i in range(1, 8)]
-RIGHT_JOINT_NAMES   = [f"openarm_right_joint{i}" for i in range(1, 8)]
-LEFT_GRIPPER_JOINT_NAME  = "openarm_left_finger_joint1"
-RIGHT_GRIPPER_JOINT_NAME  = "openarm_right_finger_joint1"
+JOINT_NAMES         = [f"openarm_left_joint{i}" for i in range(1, 8)]
 LAMBDA_VAL          = 0.01
 POSITION_ONLY       = False
 CONTROL_RATE        = 10.0      # Hz
@@ -26,6 +23,7 @@ JOINT_STATE_TOPIC   = "/joint_states"
 TARGET_POSE_TOPIC   = "/left/ik_target_pose"
 GRIPPER_TOPIC       = "/left/gripper_command"
 PUBLISH_TOPIC       = "/arm/command"
+GRIPPER_JOINT_NAME  = "openarm_left_finger_joint1"
 
 # ─────────────────────────────────────────
 # IK solver (numpy)
@@ -92,7 +90,7 @@ class DifferentialIKNode(Node):
         # Map JOINT_NAMES → velocity/configuration indices in full model
         self.q_indices = []
         self.v_indices = []
-        for name in LEFT_JOINT_NAMES:
+        for name in JOINT_NAMES:
             jid = self.model.getJointId(name)
             jnt = self.model.joints[jid]
             self.q_indices.extend(range(jnt.idx_q, jnt.idx_q + jnt.nq))
@@ -102,7 +100,7 @@ class DifferentialIKNode(Node):
         self._lock = Lock()
         self.latest_joint_state: Optional[JointState] = None
         self.latest_target_pose: Optional[PoseStamped] = None
-        self.latest_left_gripper_pos: float = 0.0
+        self.latest_gripper_pos: float = 0.0
         self.name_to_idx: dict = {}
 
         # ROS2
@@ -113,7 +111,7 @@ class DifferentialIKNode(Node):
         self.create_timer(1.0 / CONTROL_RATE, self._control_loop)
 
         self.get_logger().info(
-            f"DifferentialIK (pinocchio) started | EE: {EE_FRAME} | joints: {LEFT_JOINT_NAMES}"
+            f"DifferentialIK (pinocchio) started | EE: {EE_FRAME} | joints: {JOINT_NAMES}"
         )
 
     def _joint_cb(self, msg: JointState):
@@ -128,18 +126,19 @@ class DifferentialIKNode(Node):
     def _gripper_cb(self, msg: JointState):
         with self._lock:
             if msg.position:
-                self.latest_left_gripper_pos = msg.position[0]
+                self.latest_gripper_pos = msg.position[0]
 
     def _control_loop(self):
         with self._lock:
             js  = self.latest_joint_state
             tgt = self.latest_target_pose
+            n2i = self.name_to_idx
 
         if js is None or tgt is None:
             return
 
-        # Current joint angles (7,) — /joint_states: [0-7] right arm, [8-14] left joints 1-7
-        q_ctrl = np.array(js.position[8:15])
+        # Current joint angles (7,)
+        q_ctrl = np.array([js.position[n2i[name]] for name in JOINT_NAMES])
 
         # Build full pinocchio q (neutral for joints not in JOINT_NAMES)
         q = pin.neutral(self.model)
@@ -174,12 +173,11 @@ class DifferentialIKNode(Node):
 
         # Publish
         with self._lock:
-            left_gripper_pos = self.latest_left_gripper_pos
+            gripper_pos = self.latest_gripper_pos
         out = JointState()
         out.header.stamp = self.get_clock().now().to_msg()
-        out.name = RIGHT_JOINT_NAMES + [RIGHT_GRIPPER_JOINT_NAME] + LEFT_JOINT_NAMES + [LEFT_GRIPPER_JOINT_NAME]
-        right = [-0.9, 0.35, 0.24, 2.0, 0.54, 0., -1.1, 1.]
-        out.position = right + q_cmd.tolist() + [left_gripper_pos]
+        out.name     = JOINT_NAMES + [GRIPPER_JOINT_NAME]
+        out.position = q_cmd.tolist() + [gripper_pos]
         self.pub.publish(out)
 
 

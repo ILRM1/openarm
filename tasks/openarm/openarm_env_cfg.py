@@ -123,14 +123,14 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
 
     # env
     sim_dt = 1/120.
-    decimation = 2 # 60 Hz
-    episode_length_s = 10. #10.0
-    num_sim_steps_to_render=4 # renders every 4 sim steps, so 60 Hz
+    decimation = 12 # 10 Hz
+    num_sim_steps_to_render=12 # renders every 12 sim steps, so 10 Hz
+    episode_length_s = 15.
     num_actions = 7
     success_timeout = 2.
     distillation = False
-    num_states = 38
-    num_observations = 38
+    num_states = 37
+    num_observations = 37
     num_student_observations = 24
     num_teacher_observations = num_observations
 
@@ -138,8 +138,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     observation_space = 0
     action_space = 0
 
-    action_scale = (0.01, 0.06, 0.044)
-    #action_scale = (0.02, 0.1, 0.044)
+    #action_scale = (0.01, 0.05, 0.044)
+    action_scale = (0.02, 0.1, 0.044)
     #action_scale = (0.04, 0.2, 0.044)
     
     asymmetric_obs = True
@@ -190,7 +190,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
 
                     "openarm_left_finger_joint.*": 0.044,
                     "openarm_right_finger_joint.*": 0.044,
-                },  # Close the gripper
+                }, 
         )
     )
     left_arm_joint_name = [
@@ -265,10 +265,10 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             rot=(1.0, 0.0, 0.0, 0.0)),
     )
     # distillation related parameters
-    # img_width = 120  
-    # img_height = 96
-    img_width = 240  
-    img_height = 192
+    img_width = 120  
+    img_height = 96
+    # img_width = 240  
+    # img_height = 192
     camera_rand_rot_range = 3
     camera_rand_pos_range = 0.03
 
@@ -309,14 +309,14 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 3.),   
+            clipping_range=(0.01, 5.),   
             projection_type="pinhole",
         ),
         width=head_img_width,   
         height=head_img_height,   
         data_types=["rgb",       
                     "depth",],
-        update_period=1.0 / fps,  
+        #update_period=1.0 / fps,  
     )   
 
     # wrist cam
@@ -356,14 +356,14 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 3.),   
+            clipping_range=(0.01, 5.),   
             projection_type="pinhole",
         ),
         width=wrist_img_width,   
         height=wrist_img_height,   
         data_types=["rgb",       
                     "depth",],
-        update_period=1.0 / fps,  
+        #update_period=1.0 / fps,  
     )
 
     wrist_R_cam_cfg = TiledCameraCfg(
@@ -377,14 +377,14 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 3.),   
+            clipping_range=(0.01, 5.),   
             projection_type="pinhole",
         ),
         width=wrist_img_width,   
         height=wrist_img_height,   
         data_types=["rgb",       
                     "depth",],
-        update_period=1.0 / fps,  
+        #update_period=1.0 / fps,  
     )
 
     pred_pos_marker_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
@@ -480,7 +480,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # Object disturbance wrench fixed params
     wrench_trigger_every = int(1. / (decimation * sim_dt)) # 1 sec
     torsional_radius = 0.01 # m
-    hand_to_object_dist_threshold = 0.1 # m
+    hand_to_object_dist_threshold = 0.2 # m
     #wrench_prob_per_rollout = 0. # NOTE: currently not used
 
     # Object scaling
@@ -533,9 +533,6 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         },
     }
 
-    # Action space related parameters
-    max_pose_angle = 45.0
-
     # depth randomization parameters
     img_aug_type = "rgb"
     aug_depth = True
@@ -544,7 +541,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     cam_matrix[1, 1] = 2.9947157
     cam_matrix[2, 3] = -1.
     cam_matrix[3, 2] = 1.e-3
-    d_min = 0.05
+    d_min = 0.01
     d_max = 5.
     depth_randomization_cfg_dict = {
         # Dropout and random noise blob parameters
