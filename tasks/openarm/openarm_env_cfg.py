@@ -129,8 +129,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     num_actions = 7
     success_timeout = 2.
     distillation = False
-    num_states = 37
-    num_observations = 37
+    num_states = 44
+    num_observations = 44
     num_student_observations = 24
     num_teacher_observations = num_observations
 
@@ -269,8 +269,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     img_height = 96
     # img_width = 240  
     # img_height = 192
-    camera_rand_rot_range = 3
-    camera_rand_pos_range = 0.03
+    camera_rand_rot_range = 5
+    camera_rand_pos_range = 0.05
 
     # head cam
     head_camera_pos = [0.09, 0.0, 0.52]
@@ -512,8 +512,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             "joint_vel_noise": (0., 0.)
         },
         "robot_state_noise": {
-            "robot_joint_pos_noise": (0.0, 0.08), # rad
-            "robot_joint_pos_bias": (0.0, 0.08), # rad
+            "robot_joint_pos_noise": (0.0, 0.1), # rad
+            "robot_joint_pos_bias": (0.0, 0.1), # rad
             "robot_joint_vel_noise": (0.0, 0.18), # rad
             "robot_joint_vel_bias": (0.0, 0.08), # rad
         },

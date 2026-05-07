@@ -14,6 +14,7 @@ from sensor_msgs.msg import JointState, Image
 from tf2_ros import TransformBroadcaster
 from std_msgs.msg import Bool
 from rclpy.qos import qos_profile_sensor_data
+import message_filters
 
 # Third party
 import torch
@@ -252,32 +253,30 @@ class DextrahFGPNode(Node):
         # For converting ROS image messages to CV formates
         self.bridge = CvBridge()
 
-        # Camera subscriber
-        self._left_image_lock = Lock()
-        self._right_image_lock = Lock()
+        # Camera / robot state
+        self._synced_lock = Lock()
         self._left_image = None
         self._right_image = None
         self._image_height = 384
-        self._image_width = 480 
-
-        # NOTE: expecting 1/2 the resolution
+        self._image_width = 480
         self._downsample_factor = 2
-        self.camera_left_feedback_time = time.time()
-        self.camera_left_sub = self.create_subscription(Image, '/camera/image', self._left_camera_callback, qos_profile_sensor_data)
+        self.synced_feedback_time = time.time()
 
-        self.camera_right_feedback_time = time.time()
-        self.camera_right_sub = self.create_subscription(Image, '/wristcam_left/image',self._right_camera_callback, qos_profile_sensor_data)
-
-        # Robot subscribers
         self.robot_q = torch.zeros(self.batch_size, 16, device=self.device)
         self.robot_qd = torch.zeros(self.batch_size, 16, device=self.device)
         self.left_tcp_pose = torch.zeros(self.batch_size, 6, device=self.device)
-        self.openarm_feedback_time = time.time()
-        self.left_tcp_pose_feedback_time = time.time()
-        self._openarm_joint_position_lock = Lock()
-        self._left_tcp_pose_sub_lock = Lock()
-        self._openarm_sub = self.create_subscription(JointState(), '/joint_states', self._openarm_sub_callback, 1)
-        self._tcp_pose_sub = self.create_subscription(PoseStamped(), '/tcp_pose/left', self._tcp_pose_sub_callback, 1)
+
+        # ApproximateTimeSynchronizer: camera(L) + camera(R) + joint_states + tcp_pose
+        _left_img_sub  = message_filters.Subscriber(self, Image,       '/camera/image',      qos_profile=qos_profile_sensor_data)
+        _right_img_sub = message_filters.Subscriber(self, Image,       '/wristcam_left/image', qos_profile=qos_profile_sensor_data)
+        _joint_sub     = message_filters.Subscriber(self, JointState,  '/joint_states')
+        _tcp_sub       = message_filters.Subscriber(self, PoseStamped, '/tcp_pose/left')
+        self._sync = message_filters.ApproximateTimeSynchronizer(
+            [_left_img_sub, _right_img_sub, _joint_sub, _tcp_sub],
+            queue_size=10,
+            slop=0.05,
+        )
+        self._sync.registerCallback(self._synced_callback)
 
         self._publish_rate = 10. # Hz
         self._publish_dt = 1./self._publish_rate # s
@@ -347,125 +346,55 @@ class DextrahFGPNode(Node):
         # Perform cuda graph capture of FGP
         self.dextrah_fgp.setup_cuda_graph()
 
-    def _left_camera_callback(self, msg):
-        '''
-        TODO: UPDATE
-        '''
-        # Convert ROS camera data to np array of shape height, width, channel
-        #img_np = np.frombuffer(
-        #    msg.data, dtype=np.uint8).reshape((self._image_height, self._image_width, 3)).astype(np.float32)
-
-        # Convert ROS image to numpy image with h x w x 3, and rgb ordering
+    def _img_to_tensor(self, msg):
         img_np = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8').astype(np.float32)
-
-        # Interpolate down to the target image size
         img_np = cv2.resize(
             img_np,
-            (self._image_width//self._downsample_factor, self._image_height//self._downsample_factor),
-            interpolation=cv2.INTER_LINEAR
+            (self._image_width // self._downsample_factor, self._image_height // self._downsample_factor),
+            interpolation=cv2.INTER_LINEAR,
+        )
+        img_np = np.transpose(img_np, (2, 0, 1)) / 255.
+        return torch.from_numpy(img_np).to(self.device).unsqueeze(0)
+
+    def _synced_callback(self, left_img_msg, right_img_msg, joint_msg, tcp_msg):
+        # Images
+        left_img  = self._img_to_tensor(left_img_msg)
+        right_img = self._img_to_tensor(right_img_msg)
+
+        # Joint state (positional: right[0-6], right_finger[7], left[8-14], left_finger[15])
+        pos = joint_msg.position
+        vel = joint_msg.velocity if joint_msg.velocity else [0.0] * len(pos)
+        r_pos  = list(pos[0:7]);   r_vel  = list(vel[0:7])
+        rf_pos = [pos[7]];         rf_vel = [vel[7]]
+        l_pos  = list(pos[8:15]);  l_vel  = list(vel[8:15])
+        lf_pos = [pos[15]];        lf_vel = [vel[15]]
+
+        robot_q  = torch.zeros(self.batch_size, 16, device=self.device)
+        robot_qd = torch.zeros(self.batch_size, 16, device=self.device)
+        robot_q[:,  :7]   = torch.tensor([l_pos],  dtype=torch.float32, device=self.device)
+        robot_qd[:, :7]   = torch.tensor([l_vel],  dtype=torch.float32, device=self.device)
+        robot_q[:,  7:14] = torch.tensor([r_pos],  dtype=torch.float32, device=self.device)
+        robot_qd[:, 7:14] = torch.tensor([r_vel],  dtype=torch.float32, device=self.device)
+        robot_q[:,  14:15] = torch.tensor([lf_pos], dtype=torch.float32, device=self.device)
+        robot_qd[:, 14:15] = torch.tensor([lf_vel], dtype=torch.float32, device=self.device)
+        robot_q[:,  15:16] = torch.tensor([rf_pos], dtype=torch.float32, device=self.device)
+        robot_qd[:, 15:16] = torch.tensor([rf_vel], dtype=torch.float32, device=self.device)
+
+        # TCP pose
+        p = tcp_msg.pose.position
+        o = tcp_msg.pose.orientation
+        euler = R.from_quat([o.x, o.y, o.z, o.w]).as_euler('xyz')
+        left_tcp_pose = torch.tensor(
+            [[p.x, p.y, p.z, euler[0], euler[1], euler[2]]],
+            dtype=torch.float32, device=self.device,
         )
 
-#        bgr_image = cv2.cvtColor(img_np.astype(np.uint8), cv2.COLOR_RGB2BGR)
-#        cv2.imshow('Left RGB Image', bgr_image)
-#
-#        cv2.waitKey(1)
-
-        # Reshape into (3, height, width)
-        img_np = np.transpose(img_np, (2, 0, 1))
-
-        # Scale to be between [0, 1]
-        img_np /= 255.
-
-        # Move to torch tensor and make sure shape is 1x3xhxw
-        with self._left_image_lock:
-            self.camera_left_feedback_time = time.time()
-            self._left_image = torch.from_numpy(img_np).to(self.device).unsqueeze(0)
-
-    def _right_camera_callback(self, msg):
-        '''
-        TODO: UPDATE
-        '''
-        # Convert ROS camera data to np array of shape height, width, channel
-        #img_np = np.frombuffer(
-        #    msg.data, dtype=np.uint8).reshape((self._image_height, self._image_width, 3)).astype(np.float32)
-
-        # Convert ROS image to numpy image with h x w x 3, and rgb ordering
-        img_np = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8').astype(np.float32)
-
-        # Interpolate down to the target image size
-        img_np = cv2.resize(
-            img_np,
-            (self._image_width//self._downsample_factor, self._image_height//self._downsample_factor),
-            interpolation=cv2.INTER_LINEAR
-        )
-
-#        bgr_image = cv2.cvtColor(img_np.astype(np.uint8), cv2.COLOR_RGB2BGR)
-#        cv2.imshow('Right RGB Image', bgr_image)
-#
-#        cv2.waitKey(1)
-
-        # Reshape into (3, height, width)
-        img_np = np.transpose(img_np, (2, 0, 1))
-
-        # Scale to be between [0, 1]
-        img_np /= 255.
-
-        # Move to torch tensor and make sure shape is 1x3xhxw
-        with self._right_image_lock:
-            self.camera_right_feedback_time = time.time()
-            self._right_image = torch.from_numpy(img_np).to(self.device).unsqueeze(0)
-
-    def _openarm_sub_callback(self, msg):
-
-        name_idx = {n: i for i, n in enumerate(msg.name)}
-
-        left_joints  = [f"openarm_left_joint{i}"  for i in range(1, 8)]
-        right_joints = [f"openarm_right_joint{i}" for i in range(1, 8)]
-
-        def extract(joints, field):
-            arr = getattr(msg, field)
-            return [arr[name_idx[j]] if (j in name_idx and arr) else 0.0 for j in joints]
-
-        l_pos = extract(left_joints,  "position")
-        l_vel = extract(left_joints,  "velocity")
-        r_pos = extract(right_joints, "position")
-        r_vel = extract(right_joints, "velocity")
-
-        lf_pos = extract(["openarm_left_finger_joint1"],  "position")
-        lf_vel = extract(["openarm_left_finger_joint1"],  "velocity")
-        rf_pos = extract(["openarm_right_finger_joint1"], "position")
-        rf_vel = extract(["openarm_right_finger_joint1"], "velocity")
-
-        with self._openarm_joint_position_lock:
-            self.openarm_feedback_time = time.time()
-            self.robot_q[:,  :7].copy_(torch.tensor([l_pos],  dtype=torch.float32, device=self.device))
-            self.robot_qd[:, :7].copy_(torch.tensor([l_vel],  dtype=torch.float32, device=self.device))
-            self.robot_q[:,  7:14].copy_(torch.tensor([r_pos], dtype=torch.float32, device=self.device))
-            self.robot_qd[:, 7:14].copy_(torch.tensor([r_vel], dtype=torch.float32, device=self.device))
-            self.robot_q[:,  14:15].copy_(torch.tensor([lf_pos], dtype=torch.float32, device=self.device))
-            self.robot_qd[:, 14:15].copy_(torch.tensor([lf_vel], dtype=torch.float32, device=self.device))
-            self.robot_q[:,  15:16].copy_(torch.tensor([rf_pos], dtype=torch.float32, device=self.device))
-            self.robot_qd[:, 15:16].copy_(torch.tensor([rf_vel], dtype=torch.float32, device=self.device))
-            
-
-    def _tcp_pose_sub_callback(self, msg):
-
-        p = msg.pose.position
-        o = msg.pose.orientation
-        left_tcp_pos = torch.tensor(
-            [p.x, p.y, p.z], dtype=torch.float32, device=self.device
-        )
-
-        quat_xyzw = [o.x, o.y, o.z, o.w]
-   
-        euler = R.from_quat(quat_xyzw).as_euler('xyz')
-        euler = torch.tensor(euler, dtype=torch.float32, device=self.device)
-
-        left_tcp_pose = torch.cat((left_tcp_pos, euler), dim=-1).to(dtype=left_tcp_pos.dtype)
-       
-        # Copy over to robot state tensors
-        with self._left_tcp_pose_sub_lock:
-            self.left_tcp_pose_feedback_time = time.time()
+        with self._synced_lock:
+            self.synced_feedback_time = time.time()
+            self._left_image  = left_img
+            self._right_image = right_img
+            self.robot_q.copy_(robot_q)
+            self.robot_qd.copy_(robot_qd)
             self.left_tcp_pose.copy_(left_tcp_pose)
 
     def _left_tcp_target_pose_pub_callback(self):
@@ -533,7 +462,7 @@ class DextrahFGPNode(Node):
         
         # robot_q layout: [left_joints(0-6), right_joints(7-13), left_finger(14), right_finger(15)]
         # msg.position layout: [left_joints(0-6), left_finger(7), right_joints(8-14), right_finger(15)]
-        with self._openarm_joint_position_lock:
+        with self._synced_lock:
             q = self.robot_q[0].cpu().numpy()
         current = [q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[14],
                    q[7], q[8], q[9], q[10], q[11], q[12], q[13], q[15]]
@@ -603,56 +532,25 @@ class DextrahFGPNode(Node):
 
 
     def compute_fgp_observation(self):
-
-        feedback_timed_out = False
-
-        with self._left_tcp_pose_sub_lock:
+        with self._synced_lock:
             end = time.time()
+            feedback_timed_out = (end - self.synced_feedback_time) > (3. * self._publish_dt)
+            if feedback_timed_out:
+                print('no synced feedback')
 
+            robot_q      = self.robot_q[:, :7].clone()
+            gripper_q    = self.robot_q[:, 14].unsqueeze(-1).clone().abs() * 0.044
             left_tcp_pose = self.left_tcp_pose.clone()
+            left_image   = self._left_image.clone()  if self._left_image  is not None else None
+            right_image  = self._right_image.clone() if self._right_image is not None else None
 
-            if (end - self.left_tcp_pose_feedback_time) > (3. * self._publish_dt):
-                print('no feedback from left tcp pose')
-                feedback_timed_out = True
-        
-
-        with self._openarm_joint_position_lock:
-            end = time.time()
-
-            robot_q = self.robot_q[:, :7].clone()
-            gipper_q = self.robot_q[:, 14].unsqueeze(-1).clone().abs()*0.044
-
-            if (end - self.openarm_feedback_time) > (3. * self._publish_dt):
-                print('no feedback from openarm joints')
-                feedback_timed_out = True
+        if left_image is None or right_image is None:
+            feedback_timed_out = True
 
         state = torch.cat(
-            (
-                robot_q,
-                gipper_q,
-                left_tcp_pose,
-                self.object_goal, 
-                self.last_actions,
-            ),
-            dim=-1
+            (robot_q, gripper_q, left_tcp_pose, self.object_goal, self.last_actions),
+            dim=-1,
         )
-
-        # Copy camera image
-        left_image = None
-        with self._left_image_lock:
-            end = time.time()
-            if (end - self.camera_left_feedback_time) > (3. * self._publish_dt * 2): 
-                print('no feedback from left camera')
-                feedback_timed_out = True
-            left_image = torch.clone(self._left_image)
-
-        right_image = None
-        with self._right_image_lock:
-            end = time.time()
-            if (end - self.camera_right_feedback_time) > (3. * self._publish_dt * 2): 
-                print('no feedback from right camera')
-                feedback_timed_out = True
-            right_image = torch.clone(self._right_image)
 
         return state, left_image, right_image, feedback_timed_out
 

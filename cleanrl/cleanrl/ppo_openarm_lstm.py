@@ -91,9 +91,9 @@ class Args:
     """save model every N updates (0 = only at the end)"""
     video: bool = True
     """whether to record videos during training"""
-    video_length: int = 1000
+    video_length: int = 500
     """length of the recorded video (in steps)"""
-    video_interval: int = 2000
+    video_interval: int = 10000
     """interval between video recordings (in steps)"""
     resume_path: str = ""
     """path to checkpoint .pth file to resume training from"""
@@ -150,7 +150,7 @@ class Agent(nn.Module):
         super().__init__()
 
         self.img_w, self.img_h = int(envs.cfg.head_img_width), int(envs.cfg.head_img_height)
-        self.proprio_dim = envs.cfg.num_observations
+        self.proprio_dim = envs.cfg.num_teacher_observations
 
         # Separate CNNs for head and wrist
         self.head_cnn, self.head_lns, self.head_pool = self._make_cnn()
@@ -418,10 +418,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             next_done = (terminations | truncations).float()
             rewards[step] = reward 
 
-            record_reward += reward[0]                
-            if next_done[0]:
-                writer.add_scalar("rewards", record_reward, global_step)
-                record_reward = 0
+            # record_reward += reward[0]                
+            # if next_done[0]:
+            #     writer.add_scalar("rewards", record_reward, global_step)
+            #     record_reward = 0
 
 
         # bootstrap value if not done
@@ -529,7 +529,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
-        print("SPS:", int(global_step / (time.time() - start_time)))
+        #print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
         if args.save_model and args.save_interval > 0 and iteration % args.save_interval == 0:

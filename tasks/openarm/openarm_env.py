@@ -184,8 +184,7 @@ class OpenarmEnv(DirectRLEnv):
         self.left_gripper_action = torch.ones(self.num_envs, device=self.device)
 
         # Set the starting default joint friction coefficients
-        friction_coeff = torch.tensor(self.cfg.starting_robot_dof_friction_coefficients,
-                                      device=self.device)
+        friction_coeff = torch.tensor(self.cfg.starting_robot_dof_friction_coefficients,device=self.device)
         friction_coeff = friction_coeff.repeat((self.num_envs, 1))
         #self.robot.write_joint_friction_to_sim(friction_coeff, self.actuated_dof_indices, None)
         self.robot.data.default_joint_friction_coeff = friction_coeff
@@ -528,7 +527,6 @@ class OpenarmEnv(DirectRLEnv):
         left_target_pose = torch.cat((left_target_pos, left_target_quat), dim=-1).to(dtype=self.left_tcp_pose.dtype)
         left_target_pose[:, :3] =  left_target_pose[:, :3] - self.scene.env_origins
 
-        self.diff_ik_controller.reset()
         self.diff_ik_controller.set_command(torch.round(left_target_pose, decimals=3))
 
         self.joint_pos_des = self.compute_ik(self.left_tcp_id, self.left_arm_joint_id)
@@ -548,7 +546,7 @@ class OpenarmEnv(DirectRLEnv):
             head_mask = head_depth > self.cfg.d_max*10
 
             head_depth[head_depth <= 1e-8] = 10
-            head_depth[head_depth > self.cfg.d_max] = 0.
+            head_depth[head_depth > 1.] = 0.
             head_depth[head_depth < self.cfg.d_min] = 0.
             head_depth = head_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
             head_depth = F.interpolate(
@@ -561,7 +559,7 @@ class OpenarmEnv(DirectRLEnv):
             wrist_L_depth = self.wrist_L_cam.data.output["depth"].clone()
             wrist_L_mask = wrist_L_depth > self.cfg.d_max*10
             wrist_L_depth[wrist_L_depth <= 1e-8] = 10
-            wrist_L_depth[wrist_L_depth > self.cfg.d_max] = 0.
+            wrist_L_depth[wrist_L_depth > 1.] = 0.
             wrist_L_depth[wrist_L_depth < self.cfg.d_min] = 0.
             wrist_L_depth = wrist_L_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
             wrist_L_depth = F.interpolate(
@@ -597,7 +595,7 @@ class OpenarmEnv(DirectRLEnv):
             # (RlGamesVecEnvWrapper tries torch.clamp on all obs keys, so depth can't go in the dict)
             head_depth = self.head_cam.data.output["depth"].clone()
             head_depth[head_depth <= 1e-8] = 10
-            head_depth[head_depth > self.cfg.d_max] = 0.
+            head_depth[head_depth > 1.] = 0.
             head_depth[head_depth < self.cfg.d_min] = 0.
             head_depth = head_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
             # head_depth = F.interpolate(
@@ -608,7 +606,7 @@ class OpenarmEnv(DirectRLEnv):
 
             wrist_L_depth = self.wrist_L_cam.data.output["depth"].clone()
             wrist_L_depth[wrist_L_depth <= 1e-8] = 10
-            wrist_L_depth[wrist_L_depth > self.cfg.d_max] = 0.
+            wrist_L_depth[wrist_L_depth > 1.] = 0.
             wrist_L_depth[wrist_L_depth < self.cfg.d_min] = 0.
             wrist_L_depth = wrist_L_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
             # wrist_L_depth = F.interpolate(
@@ -617,8 +615,7 @@ class OpenarmEnv(DirectRLEnv):
             # )
             wrist_L_depth_flat = wrist_L_depth.reshape(wrist_L_depth.shape[0], -1)  # (N, 19200)
 
-            policy_with_depth = torch.cat([policy_obs, head_depth_flat/5., wrist_L_depth_flat/5.], dim=-1)  # (N, 34+19200+19200=38434)
-            #observations = {"policy": policy_obs, "critic": critic_obs}
+            policy_with_depth = torch.cat([policy_obs, head_depth_flat, wrist_L_depth_flat], dim=-1)  # (N, 34+19200+19200=38434)
             
             observations = policy_with_depth
             
@@ -631,8 +628,7 @@ class OpenarmEnv(DirectRLEnv):
         # Update signals related to reward
         self.compute_intermediate_reward_values()
 
-        (
-            hand_to_object_reward,
+        (hand_to_object_reward,
             object_to_goal_reward,
             close_gripper_reward,
             lift_reward
@@ -654,7 +650,7 @@ class OpenarmEnv(DirectRLEnv):
                 self.dextrah_adr.get_custom_param_value("reward_weights", "lift_weight"),
                 self.cfg.lift_sharpness
             )
-        if self.common_step_counter % 1000 == 0:
+        if self.common_step_counter % 100 == 0:
             print("hand to obj: %0.3f" % self.hand_to_object_pos_error[0].item())
             print("obj to goal: %0.3f" % self.object_to_object_goal_pos_error[0].item())
             print("obj vertical: %0.3f" % self.object_vertical_error[0].item())
@@ -675,7 +671,7 @@ class OpenarmEnv(DirectRLEnv):
         tcp_quat = self.robot.data.body_link_quat_w[:, self.left_tcp_id]
         quat_dot = torch.clamp(torch.abs((tcp_quat * target_quat).sum(dim=-1)), max=1.0)
         angle_error = 2.0 * torch.acos(quat_dot)
-        angle_goal = 5. * torch.exp(-20. * angle_error)
+        angle_goal = 3. * torch.exp(-20. * angle_error)
         angle_goal = torch.where((self.object_pos[:,2]>0.245)&(self.left_gripper_action<=0.5), angle_goal, 0.)
 
         total_reward = 0.01 * (hand_to_object_reward + lift_reward + close_gripper_reward + angle_goal).clamp(min=0.)
@@ -928,12 +924,12 @@ class OpenarmEnv(DirectRLEnv):
             torch.rand(num_ids, device=self.device)
 
 
-        self.left_tcp_pos_bias_width[env_ids, 0] = 0.006 * torch.rand(num_ids, device=self.device)
-        self.left_tcp_ori_bias_width[env_ids, 0] = 0.08 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_pos_bias_width[env_ids, 0] = 0.01 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_ori_bias_width[env_ids, 0] = 0.1 * torch.rand(num_ids, device=self.device)
         self.left_tcp_pos_bias[env_ids, 0] = self.left_tcp_pos_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
         self.left_tcp_ori_bias[env_ids, 0] = self.left_tcp_ori_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
-        self.left_tcp_pos_noise_width[env_ids, 0] = 0.006 * torch.rand(num_ids, device=self.device)
-        self.left_tcp_ori_noise_width[env_ids, 0] = 0.08 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_pos_noise_width[env_ids, 0] = 0.01 * torch.rand(num_ids, device=self.device)
+        self.left_tcp_ori_noise_width[env_ids, 0] = 0.1 * torch.rand(num_ids, device=self.device)
 
 #        # Update whether to apply wrench for the episode
 #        self.apply_wrench = torch.where(
@@ -955,55 +951,56 @@ class OpenarmEnv(DirectRLEnv):
                 #print('not increasing DR ranges')
                 self.step_since_last_dr_change += 1
 
+        head_rand_rots = np.random.uniform(
+            -self.cfg.camera_rand_rot_range,
+            self.cfg.camera_rand_rot_range,
+            size=(num_ids, 3)
+        )
+        head_new_rots = head_rand_rots + self.head_cam_rot_eul_orig
+        head_new_rots_quat = R.from_euler('xyz', head_new_rots, degrees=True).as_quat()
+        head_new_rots_quat = head_new_rots_quat[:, [3, 0, 1, 2]]
+        head_new_rots_quat = torch.tensor(head_new_rots_quat).to(self.device).float()
+        head_new_pos = self.head_cam_pos_orig + torch.empty(
+            num_ids, 3, device=self.device
+        ).uniform_(
+            -self.cfg.camera_rand_pos_range,
+            self.cfg.camera_rand_pos_range
+        )
+        np_env_ids = env_ids.cpu().numpy()
+    
+        self.head_cam.set_world_poses(
+            positions=head_new_pos + self.scene.env_origins[env_ids],
+            orientations=head_new_rots_quat,
+            env_ids=env_ids,
+            convention="usd"
+        )
+
+        wrist_rand_rots = np.random.uniform(
+            -self.cfg.camera_rand_rot_range,
+            self.cfg.camera_rand_rot_range,
+            size=(num_ids, 3)
+        )
+        wrist_new_rots = wrist_rand_rots + self.wrist_L_cam_rot_eul_orig
+        wrist_new_rots_quat = R.from_euler('xyz', wrist_new_rots, degrees=True).as_quat()
+        wrist_new_rots_quat = wrist_new_rots_quat[:, [3, 0, 1, 2]]
+        wrist_new_rots_quat = torch.tensor(wrist_new_rots_quat).to(self.device).float()
+        wrist_new_pos = self.wrist_L_cam_pos_orig + torch.empty(
+            num_ids, 3, device=self.device
+        ).uniform_(
+            -self.cfg.camera_rand_pos_range,
+            self.cfg.camera_rand_pos_range
+        )
+    
+        self.wrist_L_cam.set_world_poses(
+            positions=wrist_new_pos + self.scene.env_origins[env_ids],
+            orientations=wrist_new_rots_quat,
+            env_ids=env_ids,
+            convention="usd"
+        )        
+
+
         # randomize camera position
         if self.cfg.distillation:
-            head_rand_rots = np.random.uniform(
-                -self.cfg.camera_rand_rot_range,
-                self.cfg.camera_rand_rot_range,
-                size=(num_ids, 3)
-            )
-            head_new_rots = head_rand_rots + self.head_cam_rot_eul_orig
-            head_new_rots_quat = R.from_euler('xyz', head_new_rots, degrees=True).as_quat()
-            head_new_rots_quat = head_new_rots_quat[:, [3, 0, 1, 2]]
-            head_new_rots_quat = torch.tensor(head_new_rots_quat).to(self.device).float()
-            head_new_pos = self.head_cam_pos_orig + torch.empty(
-                num_ids, 3, device=self.device
-            ).uniform_(
-                -self.cfg.camera_rand_pos_range,
-                self.cfg.camera_rand_pos_range
-            )
-            np_env_ids = env_ids.cpu().numpy()
-       
-            self.head_cam.set_world_poses(
-                positions=head_new_pos + self.scene.env_origins[env_ids],
-                orientations=head_new_rots_quat,
-                env_ids=env_ids,
-                convention="usd"
-            )
-
-            wrist_rand_rots = np.random.uniform(
-                -self.cfg.camera_rand_rot_range,
-                self.cfg.camera_rand_rot_range,
-                size=(num_ids, 3)
-            )
-            wrist_new_rots = wrist_rand_rots + self.wrist_L_cam_rot_eul_orig
-            wrist_new_rots_quat = R.from_euler('xyz', wrist_new_rots, degrees=True).as_quat()
-            wrist_new_rots_quat = wrist_new_rots_quat[:, [3, 0, 1, 2]]
-            wrist_new_rots_quat = torch.tensor(wrist_new_rots_quat).to(self.device).float()
-            wrist_new_pos = self.wrist_L_cam_pos_orig + torch.empty(
-                num_ids, 3, device=self.device
-            ).uniform_(
-                -self.cfg.camera_rand_pos_range,
-                self.cfg.camera_rand_pos_range
-            )
-       
-            self.wrist_L_cam.set_world_poses(
-                positions=wrist_new_pos + self.scene.env_origins[env_ids],
-                orientations=wrist_new_rots_quat,
-                env_ids=env_ids,
-                convention="usd"
-            )        
-
 
             if self.cfg.disable_dome_light_randomization:
                 dome_light_rand_ratio = 0.0
@@ -1173,11 +1170,6 @@ class OpenarmEnv(DirectRLEnv):
             self.robot_joint_vel_bias
         self.robot_dof_vel_noisy *= self.dextrah_adr.get_custom_param_value("observation_annealing","coefficient")
 
-        # self.left_tcp_pos_bias[env_ids, 0] = self.left_tcp_pos_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
-        # self.left_tcp_ori_bias[env_ids, 0] = self.left_tcp_ori_bias_width[env_ids, 0] * (torch.rand(num_ids, device=self.device) - 0.5)
-        # self.left_tcp_pos_noise_width[env_ids, 0] = 0.006 * torch.rand(num_ids, device=self.device)
-        # self.left_tcp_ori_noise_width[env_ids, 0] = 0.08 * torch.rand(num_ids, device=self.device)
-
         self.left_tcp_vel = self.robot.data.body_link_vel_w[:, self.left_tcp_id]
         self.right_tcp_vel = self.robot.data.body_link_vel_w[:, self.right_tcp_id]
         
@@ -1200,14 +1192,6 @@ class OpenarmEnv(DirectRLEnv):
         # right_target_quat = quat_from_euler_xyz(self.right_tcp_pose[:, 3], self.right_tcp_pose[:, 4], self.right_tcp_pose[:, 5])
         # self.right_tcp_pose = torch.cat((self.right_tcp_pose[:,:3], right_target_quat), dim=-1).to(dtype=self.right_tcp_pose.dtype)
 
-        # self.left_tcp_pose_noisy = self.left_tcp_pose +\
-        #     self.object_pos_noise_width *\
-        #     2. * (torch.rand_like(self.left_tcp_pose) - 0.5) +\
-        #     self.object_pos_bias
-        
-        # left_target_quat = quat_from_euler_xyz(self.left_tcp_pose_noisy[:, 3], self.left_tcp_pose_noisy[:, 4], self.left_tcp_pose_noisy[:, 5])
-        # self.left_tcp_pose_noisy = torch.cat((self.left_tcp_pose_noisy[:,:3], left_target_quat), dim=-1).to(dtype=self.left_tcp_pose_noisy.dtype)
-        
         # self.right_tcp_pose_noisy = self.right_tcp_pose +\
         #     self.object_pos_noise_width *\
         #     2. * (torch.rand_like(self.right_tcp_pose) - 0.5) +\
@@ -1254,34 +1238,9 @@ class OpenarmEnv(DirectRLEnv):
             0.
         )
 
-        # Object to palm and fingertip distance
-        # It is a max over the distances from points on hand to object
+        # Object to tcp distance
         self.hand_to_object_pos_error = torch.norm(self.left_tcp_pose[:,:3] - self.object_pos, dim=-1)
 
-        #self.hand_to_object_pos_error = torch.norm(self.left_tcp_pose[:,:3] - self.object_pos, dim=-1).max(dim=-1).values
-
-
-    # def compute_student_policy_observations(self):
-    #     obs = torch.cat(
-    #         (
-    #             # robot
-    #             self.robot_dof_pos_noisy, 
-    #             self.robot_dof_vel_noisy,
-    #             self.left_gripper_joint_pos.unsqueeze(-1)+0.005*\
-    #             2.*(torch.rand(self.num_envs, 1, device=self.device) - 0.5), 
-    #             self.left_tcp_pose[:, :3]+0.01*\
-    #             2.*(torch.rand(self.num_envs, 3, device=self.device) - 0.5), 
-    #             self.left_tcp_pose[:, 3:]+0.08*\
-    #             2.*(torch.rand(self.num_envs, 3, device=self.device) - 0.5), 
-    #             self.left_tcp_vel+0.1*\
-    #             2.*(torch.rand(self.num_envs, 6, device=self.device) - 0.5), 
-    #             self.object_goal, 
-    #             self.actions, 
-    #         ),
-    #         dim=-1,
-    #     )
-
-    #     return obs
     def compute_student_policy_observations(self):
         
         obs = torch.cat(
@@ -1310,6 +1269,8 @@ class OpenarmEnv(DirectRLEnv):
                 # self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], #7
                 self.left_tcp_vel, 
                 self.object_goal, #3
+                self.object_pos, #3
+                self.object_rot, #4
                 #self.object_scale,
                 self.actions,
             ),
@@ -1328,8 +1289,10 @@ class OpenarmEnv(DirectRLEnv):
                 self.left_tcp_pose, 
                 # self.left_tcp_pose[:, :3], 
                 # self.robot.data.body_pose_w[:, self.left_tcp_id][:, 3:], #7
-                self.left_tcp_vel, #6
+                self.left_tcp_vel, 
                 self.object_goal, #3
+                self.object_pos, #3
+                self.object_rot, #4
                 #self.object_scale,
                 self.actions,
                 # dr values for robot
@@ -1363,51 +1326,42 @@ class OpenarmEnv(DirectRLEnv):
 
         # Generates the random wrench
         max_linear_accel = self.dextrah_adr.get_custom_param_value("object_wrench", "max_linear_accel")
-        linear_accel = max_linear_accel * torch.rand(self.num_envs, 1, device=self.device)
+        linear_accel = max_linear_accel * (0.4 + 0.6 * torch.rand(self.num_envs, 1, device=self.device))
         max_force = (linear_accel * self.object_mass).unsqueeze(2)
         max_torque = (self.object_mass * linear_accel * self.cfg.torsional_radius).unsqueeze(2)
-        forces =\
-            max_force * torch.nn.functional.normalize(
-                torch.randn(self.num_envs, num_bodies, 3, device=self.device),
-                dim=-1
-            )
-        torques =\
-            max_torque * torch.nn.functional.normalize(
-                torch.randn(self.num_envs, num_bodies, 3, device=self.device),
-                dim=-1
-            )
+        forces = max_force * torch.nn.functional.normalize(
+                    torch.randn(self.num_envs, num_bodies, 3, device=self.device),
+                    dim=-1)
+        torques = max_torque * torch.nn.functional.normalize(
+                    torch.randn(self.num_envs, num_bodies, 3, device=self.device),
+                    dim=-1)
         
         self.object_applied_force = torch.where(
             (self.episode_length_buf.view(-1, 1, 1) % self.cfg.wrench_trigger_every) == 0,
             forces,
-            self.object_applied_force
-        )
+            self.object_applied_force)
 
         self.object_applied_force = torch.where(
             self.apply_wrench[:, None, None],
             self.object_applied_force,
-            torch.zeros_like(self.object_applied_force)
-        )
+            torch.zeros_like(self.object_applied_force))
 
         self.object_applied_torque = torch.where(
             (self.episode_length_buf.view(-1, 1, 1) % self.cfg.wrench_trigger_every) == 0,
             torques,
-            self.object_applied_torque
-        )
+            self.object_applied_torque)
 
         self.object_applied_torque = torch.where(
             self.apply_wrench[:, None, None],
             self.object_applied_torque,
-            torch.zeros_like(self.object_applied_torque)
-        )
+            torch.zeros_like(self.object_applied_torque))
 
         # Set the wrench to the buffers
-        self.object.set_external_force_and_torque(
+        self.object.permanent_wrench_composer.set_forces_and_torques(
             forces=self.object_applied_force,
             torques=self.object_applied_torque,
             body_ids = body_ids,
-            env_ids = env_ids
-        )
+            env_ids = env_ids)
 
         # Write wrench data to sim
         self.object.write_data_to_sim()
@@ -1453,12 +1407,12 @@ def compute_rewards(
     object_to_goal_reward = 0. * torch.exp(object_to_goal_sharpness * object_to_object_goal_pos_error)
     #object_to_goal_reward = torch.where(object_pos[:,2]>0.245, object_to_goal_reward, 0.)
     
-    close_gripper_reward = 5.*torch.where(hand_to_object_pos_error<=0.02, torch.exp(-3. * gripper_action), 0.)
+    close_gripper_reward = 3.*torch.where(hand_to_object_pos_error<=0.02, torch.exp(-3. * gripper_action), 0.)
     close_gripper_penalty = 0.1*torch.exp(-15. * hand_to_object_pos_error)*torch.where(((hand_to_object_pos_error>0.02)) & (gripper_action<=0.5), -1., 0.)
     
     # Reward for lifting object off table and towards object goal
-    lift_reward = 5. * torch.exp(-50. * object_vertical_error)
-    lift_reward = torch.where((object_pos[:,2]>0.245)&(gripper_action<=0.5), lift_reward, 0.)
+    lift_reward = 3. * torch.exp(-30. * object_vertical_error)
+    lift_reward = torch.where((object_pos[:,2]>0.242)&(gripper_action<=0.5), lift_reward, 0.)
 
     return hand_to_object_reward, object_to_goal_reward, close_gripper_reward+close_gripper_penalty, lift_reward
 
