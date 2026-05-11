@@ -125,12 +125,12 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     sim_dt = 1/120.
     decimation = 12 # 10 Hz
     num_sim_steps_to_render=12 # renders every 12 sim steps, so 10 Hz
-    episode_length_s = 15.
+    episode_length_s = 10.
     num_actions = 7
     success_timeout = 2.
     distillation = False
-    num_states = 44
-    num_observations = 44
+    num_states = 40
+    num_observations = 40
     num_student_observations = 24
     num_teacher_observations = num_observations
 
@@ -269,8 +269,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     img_height = 96
     # img_width = 240  
     # img_height = 192
-    camera_rand_rot_range = 5
-    camera_rand_pos_range = 0.05
+    camera_rand_rot_range = 3
+    camera_rand_pos_range = 0.03
 
     # head cam
     head_camera_pos = [0.09, 0.0, 0.52]
@@ -494,7 +494,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # NOTE: first number in range is the starting value, second number is terminal value
     adr_custom_cfg_dict = {
         "object_wrench": {
-            "max_linear_accel": (0., 10.)
+            "max_linear_accel": (0., 9.)
         },
         "object_spawn": {
             "x_width_spawn": (0., x_width),

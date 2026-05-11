@@ -510,7 +510,7 @@ class OpenarmEnv(DirectRLEnv):
         self.global_min_adr_increment = local_adr_increment
         self.actions = actions.clone().clamp(-1.0, 1.0)
 
-        self.left_gripper_action = 0.5 * (self.actions[:,6].clone() + 1.)
+        self.left_gripper_action = 0.5 * (self.actions[:,6] + 1.)
 
         # Add F/T wrench to object
         self.apply_object_wrench()
@@ -525,7 +525,6 @@ class OpenarmEnv(DirectRLEnv):
         left_target_quat = quat_mul(delta_quat, curr_quat)
 
         left_target_pose = torch.cat((left_target_pos, left_target_quat), dim=-1).to(dtype=self.left_tcp_pose.dtype)
-        left_target_pose[:, :3] =  left_target_pose[:, :3] - self.scene.env_origins
 
         self.diff_ik_controller.set_command(torch.round(left_target_pose, decimals=3))
 
@@ -618,7 +617,6 @@ class OpenarmEnv(DirectRLEnv):
             policy_with_depth = torch.cat([policy_obs, head_depth_flat, wrist_L_depth_flat], dim=-1)  # (N, 34+19200+19200=38434)
             
             observations = policy_with_depth
-            
         else:
             observations = {"policy": policy_obs, "critic": critic_obs}
 
@@ -650,7 +648,7 @@ class OpenarmEnv(DirectRLEnv):
                 self.dextrah_adr.get_custom_param_value("reward_weights", "lift_weight"),
                 self.cfg.lift_sharpness
             )
-        if self.common_step_counter % 100 == 0:
+        if self.common_step_counter % 1 == 0:
             print("hand to obj: %0.3f" % self.hand_to_object_pos_error[0].item())
             print("obj to goal: %0.3f" % self.object_to_object_goal_pos_error[0].item())
             print("obj vertical: %0.3f" % self.object_vertical_error[0].item())
@@ -664,17 +662,18 @@ class OpenarmEnv(DirectRLEnv):
         self.extras["object_to_goal_reward"] = object_to_goal_reward.mean()
         self.extras["lift_reward"] = lift_reward.mean()
 
-        # smooth = -10. * torch.norm(self.pre_actions - self.actions[:, :6], p=1, dim=-1)
-        # self.pre_actions = self.actions[:, :6].clone()
+        smooth_scale = torch.where((self.object_pos[:,2]>0.245)&(self.left_gripper_action<=0.5), -0.001, -0.001)
+        smooth = -0.0005 * torch.norm(self.pre_actions - self.actions[:, :6], p=1, dim=-1)
+        self.pre_actions = self.actions[:, :6].clone()
 
         target_quat = torch.tensor([0.0, 1.0, 0.0, 0.0], device=self.device)
         tcp_quat = self.robot.data.body_link_quat_w[:, self.left_tcp_id]
         quat_dot = torch.clamp(torch.abs((tcp_quat * target_quat).sum(dim=-1)), max=1.0)
         angle_error = 2.0 * torch.acos(quat_dot)
-        angle_goal = 3. * torch.exp(-20. * angle_error)
+        angle_goal = 2. * torch.exp(-10. * angle_error)
         angle_goal = torch.where((self.object_pos[:,2]>0.245)&(self.left_gripper_action<=0.5), angle_goal, 0.)
 
-        total_reward = 0.01 * (hand_to_object_reward + lift_reward + close_gripper_reward + angle_goal).clamp(min=0.)
+        total_reward = 0.01 * (hand_to_object_reward + lift_reward + close_gripper_reward + angle_goal + smooth).clamp(min=0.)
         #total_reward = torch.where(self.in_success_region & (self.left_gripper_action<=0.5), total_reward+0.3, total_reward)
         total_reward = torch.where(self.out_of_joint_limit, 0., total_reward)
 
@@ -703,7 +702,7 @@ class OpenarmEnv(DirectRLEnv):
 
         z_height_cutoff = 0.15
         object_too_low = self.object_pos[:,2] < z_height_cutoff
-
+        
         tip_outside_upper_x = self.left_tcp_pose[:,0] > (self.cfg.x_center + self.cfg.x_width / 2.) +0.2
         tip_outside_lower_x = self.left_tcp_pose[:,0] < 0.
 
@@ -1173,10 +1172,10 @@ class OpenarmEnv(DirectRLEnv):
         self.left_tcp_vel = self.robot.data.body_link_vel_w[:, self.left_tcp_id]
         self.right_tcp_vel = self.robot.data.body_link_vel_w[:, self.right_tcp_id]
         
-        self.left_tcp_pose = self.robot.data.body_pose_w[:, self.left_tcp_id] 
-        self.right_tcp_pose = self.robot.data.body_pose_w[:, self.right_tcp_id]
+        self.left_tcp_pose = self.robot.data.body_pose_w[:, self.left_tcp_id].clone()
+        #self.right_tcp_pose = self.robot.data.body_pose_w[:, self.right_tcp_id]
         self.left_tcp_pose[:, :3] = self.left_tcp_pose[:, :3] - self.scene.env_origins
-        self.right_tcp_pose[:, :3] = self.right_tcp_pose[:, :3] - self.scene.env_origins
+        #self.right_tcp_pose[:, :3] = self.right_tcp_pose[:, :3] - self.scene.env_origins
 
         left_tcp_pos_noisy = self.left_tcp_pose[:, :3] + self.left_tcp_pos_noise_width  * 2. * (torch.rand_like(self.left_tcp_pose[:, :3]) - 0.5) + self.left_tcp_pos_bias
         
@@ -1237,7 +1236,7 @@ class OpenarmEnv(DirectRLEnv):
             self.time_in_success_region + self.cfg.sim.dt*self.cfg.decimation,
             0.
         )
-
+        
         # Object to tcp distance
         self.hand_to_object_pos_error = torch.norm(self.left_tcp_pose[:,:3] - self.object_pos, dim=-1)
 
@@ -1258,6 +1257,7 @@ class OpenarmEnv(DirectRLEnv):
         return obs
 
     def compute_policy_observations(self):
+        
         obs = torch.cat(
             (
                 # robot
@@ -1270,7 +1270,7 @@ class OpenarmEnv(DirectRLEnv):
                 self.left_tcp_vel, 
                 self.object_goal, #3
                 self.object_pos, #3
-                self.object_rot, #4
+                #self.object_rot, #4
                 #self.object_scale,
                 self.actions,
             ),
@@ -1292,7 +1292,7 @@ class OpenarmEnv(DirectRLEnv):
                 self.left_tcp_vel, 
                 self.object_goal, #3
                 self.object_pos, #3
-                self.object_rot, #4
+                #self.object_rot, #4
                 #self.object_scale,
                 self.actions,
                 # dr values for robot
@@ -1326,7 +1326,7 @@ class OpenarmEnv(DirectRLEnv):
 
         # Generates the random wrench
         max_linear_accel = self.dextrah_adr.get_custom_param_value("object_wrench", "max_linear_accel")
-        linear_accel = max_linear_accel * (0.4 + 0.6 * torch.rand(self.num_envs, 1, device=self.device))
+        linear_accel = max_linear_accel * torch.rand(self.num_envs, 1, device=self.device)
         max_force = (linear_accel * self.object_mass).unsqueeze(2)
         max_torque = (self.object_mass * linear_accel * self.cfg.torsional_radius).unsqueeze(2)
         forces = max_force * torch.nn.functional.normalize(
@@ -1402,7 +1402,7 @@ def compute_rewards(
     lift_sharpness: float
 ):
     # Reward for moving fingertip and palm points closer to object centroid point
-    hand_to_object_reward = 1. * torch.exp(-25. * hand_to_object_pos_error)
+    hand_to_object_reward = 2. * torch.exp(-15. * hand_to_object_pos_error)
     # Reward for moving the object to the goal translational position
     object_to_goal_reward = 0. * torch.exp(object_to_goal_sharpness * object_to_object_goal_pos_error)
     #object_to_goal_reward = torch.where(object_pos[:,2]>0.245, object_to_goal_reward, 0.)
@@ -1411,8 +1411,8 @@ def compute_rewards(
     close_gripper_penalty = 0.1*torch.exp(-15. * hand_to_object_pos_error)*torch.where(((hand_to_object_pos_error>0.02)) & (gripper_action<=0.5), -1., 0.)
     
     # Reward for lifting object off table and towards object goal
-    lift_reward = 3. * torch.exp(-30. * object_vertical_error)
-    lift_reward = torch.where((object_pos[:,2]>0.242)&(gripper_action<=0.5), lift_reward, 0.)
+    lift_reward = 3. * torch.exp(-20. * object_vertical_error)
+    lift_reward = torch.where((object_pos[:,2]>0.24)&(gripper_action<=0.5), lift_reward, 0.)
 
     return hand_to_object_reward, object_to_goal_reward, close_gripper_reward+close_gripper_penalty, lift_reward
 

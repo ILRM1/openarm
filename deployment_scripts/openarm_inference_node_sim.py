@@ -248,7 +248,7 @@ class DextrahFGPNode(Node):
         self.action_scale = (0.02, 0.1, 0.044)
         self.tcp_pose_min = torch.tensor([0.05, 0., 0.21, -np.pi*2, -np.pi*2, -np.pi*2], device=self.device)
         self.tcp_pose_max = torch.tensor([0.45, 0.4, 0.35, np.pi*2, np.pi*2, np.pi*2], device=self.device)
-        self.student_ckpt = "distillation/runs/dextrah_student_20000_iters.pth"
+        self.student_ckpt = "distillation/runs/dextrah_student_30000_iters.pth"
 
         # For converting ROS image messages to CV formates
         self.bridge = CvBridge()
@@ -676,13 +676,13 @@ class DextrahFGPNode(Node):
         left_tcp_pos_targets = torch.max(torch.min(left_tcp_pos_targets, self.tcp_pose_max[:3]), self.tcp_pose_min[:3])
 
         # 시뮬과 동일: axis-angle delta → quat_mul(delta, curr)
-        euler_np = left_tcp_pose[0, 3:6].cpu().detach().numpy()
+        euler_np = left_tcp_pose[0, 3:6].float().cpu().detach().numpy()
         euler_corrected = euler_np.copy()
         euler_corrected[0] *= -1.
         euler_corrected[2] *= -1.
         curr_rot = R.from_euler('xyz', euler_corrected)
 
-        delta_rotvec = (actions[0, 3:6] * self.action_scale[1]).cpu().detach().numpy()
+        delta_rotvec = (actions[0, 3:6] * self.action_scale[1]).float().cpu().detach().numpy()
         delta_rot = R.from_rotvec(delta_rotvec)
         target_rot = delta_rot * curr_rot
         tq = target_rot.as_quat()  # xyzw
