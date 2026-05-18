@@ -247,7 +247,7 @@ class DextrahFGPNode(Node):
         self.action_scale = (0.02, 0.1, 1.)
         self.tcp_pose_min = torch.tensor([0.05, 0., 0.22, -np.pi*2, -np.pi*2, -np.pi*2], device=self.device)
         self.tcp_pose_max = torch.tensor([0.45, 0.4, 0.35, np.pi*2, np.pi*2, np.pi*2], device=self.device)
-        self.student_ckpt = "/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/dextrah_student_110000_iters.pth"
+        self.student_ckpt = "/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/dextrah_student_10000_iters.pth"
 
         # For converting ROS image messages to CV formates
         self.bridge = CvBridge()
@@ -258,10 +258,16 @@ class DextrahFGPNode(Node):
         self._left_image = None
         self._right_image = None
         self._image_height = 384
-        self._image_width = 480 
+        self._image_width = 480
 
         # NOTE: expecting 1/2 the resolution
-        self._downsample_factor = 2
+        self._downsample_factor = 1
+
+        video_path = os.path.join(os.path.dirname(__file__), "episode_000000.mp4")
+        self._video_first_frame, self._video_last_frame = self._load_video_frames(video_path)
+        with self._left_image_lock:
+            self._left_image = self._video_first_frame
+
         self.camera_left_feedback_time = time.time()
         self.camera_left_sub = self.create_subscription(Image, '/camera/image', self._left_camera_callback, qos_profile_sensor_data)
 
@@ -347,6 +353,33 @@ class DextrahFGPNode(Node):
 
         # Perform cuda graph capture of FGP
         self.dextrah_fgp.setup_cuda_graph()
+
+    def _load_video_frames(self, video_path):
+        import subprocess, shlex
+        h = self._image_height // self._downsample_factor
+        w = self._image_width // self._downsample_factor
+
+        def _extract(select_expr=None, seek_sec=None):
+            if seek_sec is not None:
+                cmd = (
+                    f"ffmpeg -ss {seek_sec} -i {shlex.quote(video_path)} "
+                    f"-vf \"scale={w}:{h}\" "
+                    f"-vframes 1 -f rawvideo -pix_fmt rgb24 pipe:1"
+                )
+            else:
+                cmd = (
+                    f"ffmpeg -i {shlex.quote(video_path)} "
+                    f"-vf \"select={select_expr},scale={w}:{h}\" "
+                    f"-vframes 1 -f rawvideo -pix_fmt rgb24 pipe:1"
+                )
+            raw = subprocess.check_output(cmd, shell=True, stderr=subprocess.DEVNULL)
+            img_np = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3).astype(np.float32)
+            img_np = np.transpose(img_np, (2, 0, 1)) / 255.
+            return torch.from_numpy(img_np).to(self.device).unsqueeze(0)
+
+        first = _extract("eq(n\\,0)")
+        last  = _extract(seek_sec=15)
+        return first, last
 
     def _left_camera_callback(self, msg):
         '''
@@ -437,38 +470,46 @@ class DextrahFGPNode(Node):
 
     def _openarm_sub_callback(self, msg):
 
-        name_idx = {n: i for i, n in enumerate(msg.name)}
-
-        left_joints  = [f"openarm_left_joint{i}"  for i in range(1, 8)]
-        right_joints = [f"openarm_right_joint{i}" for i in range(1, 8)]
-
         def extract(joints, field):
             arr = getattr(msg, field)
             return [arr[name_idx[j]] if (j in name_idx and arr) else 0.0 for j in joints]
 
-        l_pos = extract(left_joints,  "position")
-        l_vel = extract(left_joints,  "velocity")
-        r_pos = extract(right_joints, "position")
-        r_vel = extract(right_joints, "velocity")
-
-        lf_pos = extract(["openarm_left_finger_joint1"],  "position")
-        lf_vel = extract(["openarm_left_finger_joint1"],  "velocity")
-        rf_pos = extract(["openarm_right_finger_joint1"], "position")
-        rf_vel = extract(["openarm_right_finger_joint1"], "velocity")
+        if msg.name:
+            # 시뮬레이터: 이름 기반으로 파싱
+            left_joints  = [f"openarm_left_joint{i}"  for i in range(1, 8)]
+            right_joints = [f"openarm_right_joint{i}" for i in range(1, 8)]
+            name_idx = {n: i for i, n in enumerate(msg.name)}
+            l_pos = extract(left_joints,  "position")
+            l_vel = extract(left_joints,  "velocity")
+            r_pos = extract(right_joints, "position")
+            r_vel = extract(right_joints, "velocity")
+            lf_pos = extract(["openarm_left_finger_joint1"],  "position")
+            lf_vel = extract(["openarm_left_finger_joint1"],  "velocity")
+            rf_pos = extract(["openarm_right_finger_joint1"], "position")
+            rf_vel = extract(["openarm_right_finger_joint1"], "velocity")
+        else:
+            # 실제 로봇: 인덱스 기반 (right→left 순서)
+            pos = list(msg.position)
+            vel = list(msg.velocity) if msg.velocity else [0.0] * len(pos)
+            r_pos  = pos[0:7]
+            rf_pos = [pos[7]]
+            l_pos  = pos[8:15]
+            lf_pos = [pos[15]]
+            r_vel  = vel[0:7]
+            rf_vel = [vel[7]]
+            l_vel  = vel[8:15]
+            lf_vel = [vel[15]]
 
         with self._openarm_joint_position_lock:
             self._joint_state_received = True
             self.openarm_feedback_time = time.time()
-            self.robot_q[:, :7].copy_(torch.tensor([l_pos],  dtype=torch.float32, device=self.device))
-            self.robot_q[:, 7:8].copy_(torch.tensor([lf_pos],  dtype=torch.float32, device=self.device))
-            
-            self.robot_q[:,  8:15].copy_(torch.tensor([r_pos], dtype=torch.float32, device=self.device))
-            self.robot_q[:,  15:16].copy_(torch.tensor([rf_pos], dtype=torch.float32, device=self.device))
-
+            self.robot_q[:,  :7].copy_(torch.tensor([l_pos],  dtype=torch.float32, device=self.device))
             self.robot_qd[:, :7].copy_(torch.tensor([l_vel],  dtype=torch.float32, device=self.device))
-            self.robot_qd[:, 7:8].copy_(torch.tensor([lf_vel], dtype=torch.float32, device=self.device))
-
-            self.robot_qd[:, 8:15].copy_(torch.tensor([r_vel], dtype=torch.float32, device=self.device))
+            self.robot_q[:,  7:14].copy_(torch.tensor([r_pos], dtype=torch.float32, device=self.device))
+            self.robot_qd[:, 7:14].copy_(torch.tensor([r_vel], dtype=torch.float32, device=self.device))
+            self.robot_q[:,  14:15].copy_(torch.tensor([lf_pos], dtype=torch.float32, device=self.device))
+            self.robot_qd[:, 14:15].copy_(torch.tensor([lf_vel], dtype=torch.float32, device=self.device))
+            self.robot_q[:,  15:16].copy_(torch.tensor([rf_pos], dtype=torch.float32, device=self.device))
             self.robot_qd[:, 15:16].copy_(torch.tensor([rf_vel], dtype=torch.float32, device=self.device))
             
 
@@ -535,14 +576,6 @@ class DextrahFGPNode(Node):
 
     def publish_init_pos(self):
         joint_names = [
-            'openarm_left_joint1',
-            'openarm_left_joint2',
-            'openarm_left_joint3',
-            'openarm_left_joint4',
-            'openarm_left_joint5',
-            'openarm_left_joint6',
-            'openarm_left_joint7',
-            'openarm_left_finger_joint1',
             'openarm_right_joint1',
             'openarm_right_joint2',
             'openarm_right_joint3',
@@ -551,17 +584,29 @@ class DextrahFGPNode(Node):
             'openarm_right_joint6',
             'openarm_right_joint7',
             'openarm_right_finger_joint1',
+            'openarm_left_joint1',
+            'openarm_left_joint2',
+            'openarm_left_joint3',
+            'openarm_left_joint4',
+            'openarm_left_joint5',
+            'openarm_left_joint6',
+            'openarm_left_joint7',
+            'openarm_left_finger_joint1',
         ]
-        target = [1.1, -0.35,  -0.24,  2.0, -0.54, 0.0, 0.8, 1.,
-                  -1.1, 0.35,  0.24,  2.0, 0.54, 0.0, -0.8, 1.]
+        target = [-0.9, 0.35, 0.24, 2.0, 0.54, 0., -1.1, 1.,
+                  0.9, -0.35, -0.24, 2.0, -0.54, 0., 1.1, 1.,]
         
+        # robot_q layout: [left_joints(0-6), right_joints(7-13), left_finger(14), right_finger(15)]
+        # msg.position layout: [left_joints(0-6), left_finger(7), right_joints(8-14), right_finger(15)]
         self.get_logger().info('Waiting for joint states...')
         while not self._joint_state_received:
             time.sleep(0.1)
 
         with self._openarm_joint_position_lock:
-            current = self.robot_q[0].cpu().tolist()
-       
+            q = self.robot_q[0].cpu().numpy()
+        current = [q[7], q[8], q[9], q[10], q[11], q[12], q[13], q[15],
+                   q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[14],]
+
         num_steps = 100
         for step in range(1, num_steps + 1):
             alpha = step / num_steps
@@ -635,24 +680,25 @@ class DextrahFGPNode(Node):
 
             left_tcp_pose = self.left_tcp_pose.clone()
 
-            if (end - self.left_tcp_pose_feedback_time) > (3. * self._publish_dt):
-                print('no feedback from left tcp pose')
-                feedback_timed_out = True
+            # if (end - self.left_tcp_pose_feedback_time) > (3. * self._publish_dt):
+            #     print('no feedback from left tcp pose')
+            #     feedback_timed_out = True
         
 
         with self._openarm_joint_position_lock:
             end = time.time()
 
-            left_robot_q = self.robot_q[:, :8].clone()
+            robot_q = self.robot_q[:, :7].clone()
+            gipper_q = self.robot_q[:, 14].unsqueeze(-1).clone().abs()*0.044
 
             if (end - self.openarm_feedback_time) > (3. * self._publish_dt):
                 print('no feedback from openarm joints')
                 feedback_timed_out = True
 
-        left_robot_q[:,7] = left_robot_q[:,7].abs()*0.044
         state = torch.cat(
             (
-                left_robot_q,
+                robot_q,
+                gipper_q,
                 left_tcp_pose,
                 self.object_goal, 
                 self.last_actions,
@@ -667,7 +713,10 @@ class DextrahFGPNode(Node):
             if (end - self.camera_left_feedback_time) > (3. * self._publish_dt * 2): 
                 print('no feedback from left camera')
                 feedback_timed_out = True
-            left_image = torch.clone(self._left_image)
+            left_image = torch.clone(self._video_last_frame)
+            img_save = (left_image.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+            cv2.imwrite(os.path.join(os.path.dirname(__file__), "left_image_debug.png"), cv2.cvtColor(img_save, cv2.COLOR_RGB2BGR))
+            
 
         right_image = None
         with self._right_image_lock:
@@ -685,10 +734,10 @@ class DextrahFGPNode(Node):
 
         #print(state)
 
-        # img_left = (left_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-        # img_right = (right_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-        # cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_left.png", cv2.cvtColor(img_left, cv2.COLOR_RGB2BGR))
-        # cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_right.png", cv2.cvtColor(img_right, cv2.COLOR_RGB2BGR))
+        img_left = (left_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+        img_right = (right_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+        cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_left.png", cv2.cvtColor(img_left, cv2.COLOR_RGB2BGR))
+        cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_right.png", cv2.cvtColor(img_right, cv2.COLOR_RGB2BGR))
 
         action_dict = self.dextrah_fgp.step_cuda_graph(state, left_image, right_image)
 
@@ -720,7 +769,6 @@ class DextrahFGPNode(Node):
         euler_np = left_tcp_pose[0, 3:6].float().cpu().detach().numpy()
         euler_corrected = euler_np.copy()
         euler_corrected[0] *= -1.
-        euler_corrected[1] *= 1.
         euler_corrected[2] *= -1.
         curr_rot = R.from_euler('xyz', euler_corrected)
 

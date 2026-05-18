@@ -248,7 +248,7 @@ class DextrahFGPNode(Node):
         self.action_scale = (0.02, 0.1, 0.044)
         self.tcp_pose_min = torch.tensor([0.05, 0., 0.21, -np.pi*2, -np.pi*2, -np.pi*2], device=self.device)
         self.tcp_pose_max = torch.tensor([0.45, 0.4, 0.35, np.pi*2, np.pi*2, np.pi*2], device=self.device)
-        self.student_ckpt = "distillation/runs/dextrah_student_30000_iters.pth"
+        self.student_ckpt = "/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/dextrah_student_55000_iters.pth"
 
         # For converting ROS image messages to CV formates
         self.bridge = CvBridge()
@@ -259,10 +259,19 @@ class DextrahFGPNode(Node):
         self._left_image = None
         self._right_image = None
         self._image_height = 192
-        self._image_width = 240 
+        self._image_width = 240
 
         # NOTE: expecting 1/2 the resolution
         self._downsample_factor = 1
+
+        # Pre-load first/last frame from episode video
+        # video_path = os.path.join(os.path.dirname(__file__), "episode_000000.mp4")
+        # if os.path.exists(video_path):
+        #     first, last = self._load_video_frames(video_path)
+        #     with self._left_image_lock:
+        #         self._left_image = first
+        #     with self._right_image_lock:
+        #         self._right_image = last
         self.camera_left_feedback_time = time.time()
         self.camera_left_sub = self.create_subscription(Image, '/camera/image', self._left_camera_callback, qos_profile_sensor_data)
 
@@ -667,8 +676,7 @@ class DextrahFGPNode(Node):
             print('Infing!!!')
 
         object_pos = action_dict["obj_pos"]
-
-        #print(object_pos)
+        print(object_pos)
 
         left_tcp_pose = state[:, 8:14].clone()
 

@@ -87,13 +87,13 @@ class Args:
 
     save_model: bool = True
     """whether to save the model at the end of training"""
-    save_interval: int = 500
+    save_interval: int = 200
     """save model every N updates (0 = only at the end)"""
     video: bool = True
     """whether to record videos during training"""
     video_length: int = 500
     """length of the recorded video (in steps)"""
-    video_interval: int = 10000
+    video_interval: int = 1000
     """interval between video recordings (in steps)"""
     resume_path: str = ""
     """path to checkpoint .pth file to resume training from"""
@@ -194,7 +194,6 @@ class Agent(nn.Module):
     def _cnn_forward(self, x, convs, lns, pool, fc):
         for conv, ln in zip(convs, lns):
             x = F.relu(ln(conv(x)))
-       
         x= pool(x)
         x = x.flatten(1)
         x = fc(x)
@@ -205,12 +204,12 @@ class Agent(nn.Module):
         
         proprio, head_depth, wrist_L_depth = _split_obs(x, self.img_h, self.img_w, self.proprio_dim)
 
-        # import cv2
-        # img = wrist_L_depth[0, 0].detach().cpu().numpy()
-        # # normalize to 0~255
-        # img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
-        # img_uint8 = (img_norm * 255).astype("uint8")
-        # cv2.imwrite("depth_debug.png", img_uint8)
+        import cv2
+        img = head_depth[0, 0].detach().cpu().numpy()
+        # normalize to 0~255
+        img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
+        img_uint8 = (img_norm * 255).astype("uint8")
+        cv2.imwrite("depth_debug.png", img_uint8)
 
         head_cnn_out = self._cnn_forward(head_depth, self.head_cnn, self.head_lns, self.head_pool, self.head_fc)
         wrist_cnn_out = self._cnn_forward(wrist_L_depth, self.wrist_cnn, self.wrist_lns, self.wrist_pool, self.wrist_fc)
@@ -516,9 +515,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             if args.target_kl is not None and approx_kl > args.target_kl:
                 break
 
-        y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
-        var_y = np.var(y_true)
-        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+        # y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
+        # var_y = np.var(y_true)
+        # explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"], global_step)
@@ -528,7 +527,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         writer.add_scalar("losses/old_approx_kl", old_approx_kl.item(), global_step)
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
-        writer.add_scalar("losses/explained_variance", explained_var, global_step)
+        #writer.add_scalar("losses/explained_variance", explained_var, global_step)
         #print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 

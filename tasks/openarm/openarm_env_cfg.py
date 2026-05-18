@@ -125,12 +125,12 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     sim_dt = 1/120.
     decimation = 12 # 10 Hz
     num_sim_steps_to_render=12 # renders every 12 sim steps, so 10 Hz
-    episode_length_s = 10.
+    episode_length_s = 15.
     num_actions = 7
     success_timeout = 2.
     distillation = False
-    num_states = 40
-    num_observations = 40
+    num_states = 37
+    num_observations = 37
     num_student_observations = 24
     num_teacher_observations = num_observations
 
@@ -172,21 +172,21 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             pos=(0.0, 0.0, 0.0),
             rot=(1.0, 0.0, 0.0, 0.0),
             joint_pos={
-                    "openarm_left_joint1": 0.9,
+                    "openarm_left_joint1": 1.1,
                     "openarm_left_joint2": -0.35,
                     "openarm_left_joint3": -0.24,
                     "openarm_left_joint4": 2.0,
                     "openarm_left_joint5": -0.54,
                     "openarm_left_joint6": 0.,
-                    "openarm_left_joint7": 1.1,
+                    "openarm_left_joint7": 0.8,
 
-                    "openarm_right_joint1": -0.9,
+                    "openarm_right_joint1": -1.1,
                     "openarm_right_joint2": 0.35,
                     "openarm_right_joint3": 0.24,
                     "openarm_right_joint4": 2.0,
                     "openarm_right_joint5": 0.54,
                     "openarm_right_joint6": 0.0,
-                    "openarm_right_joint7": -1.1,
+                    "openarm_right_joint7": -0.8,
 
                     "openarm_left_finger_joint.*": 0.044,
                     "openarm_right_finger_joint.*": 0.044,
@@ -257,24 +257,32 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
             ),
+            scale=(0.7, 0.45, 1.),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.05 + 0.725 / 2,
-                 0.668 - 1.16 / 2,
-                 0.20 - 0.03 / 2),
+            # pos=(0.05 + 0.725 / 2,
+            #      0.668 - 1.16 / 2,
+            #      0.21 - 0.03 / 2),
+            pos=(0.25,
+                 0.2,
+                 0.21 - 0.03 / 2),
             rot=(1.0, 0.0, 0.0, 0.0)),
     )
     # distillation related parameters
     img_width = 120  
     img_height = 96
-    # img_width = 240  
-    # img_height = 192
+    # img_width = 480  
+    # img_height = 384
+
+    distil_depth_width = 120
+    distil_depth_height = 96
+
     camera_rand_rot_range = 3
-    camera_rand_pos_range = 0.03
+    camera_rand_pos_range = 0.025
 
     # head cam
-    head_camera_pos = [0.09, 0.0, 0.52]
-    head_camera_rot = [0.67799, 0.20083, -0.20083, -0.67799]
+    head_camera_pos = [0.105, 0.0, 0.515]
+    head_camera_rot = [0.68458, 0.17705, -0.17705, -0.68458]
     head_img_width = img_width     
     head_img_height = img_height
     # head_img_width = 240  
@@ -314,14 +322,14 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         width=head_img_width,   
         height=head_img_height,   
-        data_types=["rgb",       
-                    "depth",],
+        data_types=["rgb", "depth",],
         #update_period=1.0 / fps,  
     )   
 
     # wrist cam
-    wrist_camera_pos = [0.1, 0., 0.1201]
-    wrist_camera_rot = [0.29323, 0.64344, 0.64344, 0.29323]
+    #wrist_camera_pos = [0.1, 0., 0.1201]
+    wrist_camera_pos = [0.07, 0., 0.125]
+    wrist_camera_rot = [0.24184, 0.66446, 0.66446, 0.24184]
     wrist_img_width = img_width      
     wrist_img_height = img_height   
     # wrist_img_width = 240  
@@ -419,7 +427,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
 
     # Goal reaching parameters
     object_goal_tol = 0.02 # m
-    success_for_adr = 0.4
+    success_for_adr = 0.2
     min_steps_for_dr_change = 240 # number of steps
     #min_steps_for_dr_change = 5 * int(episode_length_s / (decimation * sim_dt))
 
@@ -428,10 +436,10 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     object_height_thresh = 0.15
 
     # Object spawning params
-    x_center = 0.25
-    x_width = 0.15
-    y_center = 0.2
-    y_width = 0.15
+    x_center = 0.1
+    x_width = 0.3
+    y_center = 0.25
+    y_width = 0.2
 
     # DR Controls
     enable_adr = True
