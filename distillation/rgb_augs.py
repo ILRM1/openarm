@@ -330,7 +330,7 @@ def get_motion_blur_kernel2d_batched(batch_size, kernel_size, angle_range, direc
 class RgbAug:
     def __init__(
             self, device, all_env_inds, use_stereo,
-            background_cfg, color_cfg, motion_blur_cfg
+            background_cfg, color_cfg, motion_blur_cfg, gaussian_noise_cfg=None
     ):
         self.device = device
         self.all_env_inds = all_env_inds
@@ -338,6 +338,7 @@ class RgbAug:
         self.background_cfg = background_cfg
         self.color_cfg = color_cfg
         self.motion_blur_cfg = motion_blur_cfg
+        self.gaussian_noise_cfg = gaussian_noise_cfg or {"aug_prob": 0.0, "std_range": [0.0, 0.05]}
 
         img_names = glob.glob(os.path.join(background_cfg["dir"], "*.jpg"))#[:self.num_envs]
         self.background_imgs = [
@@ -646,6 +647,19 @@ class RgbAug:
 
         return rgb_imgs
 
+    def apply_gaussian_noise_aug(self, rgb_imgs):
+        p = torch.rand(self.num_envs)
+        w_noise = p < self.gaussian_noise_cfg["aug_prob"]
+        if torch.any(w_noise):
+            std = (
+                torch.rand(w_noise.sum().item(), device=self.device) *
+                (self.gaussian_noise_cfg["std_range"][1] - self.gaussian_noise_cfg["std_range"][0]) +
+                self.gaussian_noise_cfg["std_range"][0]
+            )
+            noise = torch.randn_like(rgb_imgs[w_noise]) * std[:, None, None, None]
+            rgb_imgs[w_noise] = (rgb_imgs[w_noise] + noise).clamp_(0.0, 1.0)
+        return rgb_imgs
+
     def apply_motion_blur_aug(self, rgb_imgs):
         p = torch.rand(self.num_envs)
         w_motion_aug = p < self.motion_blur_cfg["aug_prob"]
@@ -687,7 +701,7 @@ class RgbAug:
         if self.use_stereo:
             left_img = rgb["left_img"]
             right_img = rgb["right_img"]
-            left_mask = mask["left_mask"]   
+            left_mask = mask["left_mask"]
             right_mask = mask["right_mask"]
             left_img = self.apply_background_aug(
                 left_img, left_mask, self.env_left_backgrounds
@@ -703,11 +717,19 @@ class RgbAug:
             rgb["right_img"] = self.apply_color_aug(rgb["right_img"])
             rgb["left_img"] = self.apply_motion_blur_aug(rgb["left_img"])
             rgb["right_img"] = self.apply_motion_blur_aug(rgb["right_img"])
+            rgb["left_img"] = self.apply_gaussian_noise_aug(rgb["left_img"])
+            rgb["right_img"] = self.apply_gaussian_noise_aug(rgb["right_img"])
         else:
             img = rgb
             mask = mask
             rgb = self.apply_background_aug(img, mask, self.env_backgrounds)
             rgb = self.apply_color_aug(rgb)
             rgb = self.apply_motion_blur_aug(rgb)
+            rgb = self.apply_gaussian_noise_aug(rgb)
+
+        # sample = rgb["left_img"][1]
+        # arr = (sample.cpu().float().clamp(0, 1).permute(1, 2, 0).numpy() * 255).astype(np.uint8)
+        # Image.fromarray(arr).save("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/distillation/rgb_aug_debug.png")
+
 
         return rgb

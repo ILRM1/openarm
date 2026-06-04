@@ -1,10 +1,12 @@
 '''how to run
 isaacsim isaacsim.exp.full.streaming --no-window
+conda activate isaac
 cd ~/isaac_ws/IsaacSim-ros_workspaces
 source build_ws/humble/humble_ws/install/local_setup.bash
 source build_ws/humble/isaac_sim_ros_ws/install/local_setup.bash
-python /home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/openarm_inference_node_copy.py
+python /home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/openarm_inference_node_copy_copy.py
 '''
+
 
 # System imports
 import os
@@ -252,22 +254,16 @@ class DextrahFGPNode(Node):
         self.batch_size = 1
         self.num_actions = 7
         self.num_obs = 24
-        self.action_scale = (0.015, 0.075, 1.)
+        self.action_scale = (0.01, 0.05, 1.)
         self.tcp_pose_min = torch.tensor([0.05, 0., 0.22, -np.pi*2, -np.pi*2, -np.pi*2], device=self.device)
         self.tcp_pose_max = torch.tensor([0.45, 0.4, 0.35, np.pi*2, np.pi*2, np.pi*2], device=self.device)
         self.student_ckpt = \
-        "/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/dextrah_student_65000_iters.pth"
-        #275000
-        self.debug_left_img = "debug_left2"       
-        self.debug_right_img = "debug_right2"
-        self._downsample_factor = 2
-        # 0.29, 0.
-        # 0.35, 0.3,
-        # 0.4 0.2
+        "/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/dextrah_student_35000_iters.pth"
         
         self._image_width = 480 
         self._image_height = 384
-        
+        self._downsample_factor = 2
+
         # For converting ROS image messages to CV formates
         self.bridge = CvBridge()
 
@@ -363,34 +359,6 @@ class DextrahFGPNode(Node):
         # Perform cuda graph capture of FGP
         self.dextrah_fgp.setup_cuda_graph()
 
-    def _load_debug_left_image(self, path: str):
-        img_bgr = cv2.imread(path)
-        img_np = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB).astype(np.float32)
-        img_np = cv2.resize(
-            img_np,
-            (self._image_width // self._downsample_factor, self._image_height // self._downsample_factor),
-            interpolation=cv2.INTER_LINEAR
-        )
-        img_np = np.transpose(img_np, (2, 0, 1))
-        img_np /= 255.
-        with self._left_image_lock:
-            self.camera_left_feedback_time = time.time()
-            self._left_image = torch.from_numpy(img_np).to(self.device).unsqueeze(0)
-
-    def _load_debug_right_image(self, path: str):
-        img_bgr = cv2.imread(path)
-        img_np = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB).astype(np.float32)
-        img_np = cv2.resize(
-            img_np,
-            (self._image_width // self._downsample_factor, self._image_height // self._downsample_factor),
-            interpolation=cv2.INTER_LINEAR
-        )
-        img_np = np.transpose(img_np, (2, 0, 1))
-        img_np /= 255.
-        with self._right_image_lock:
-            self.camera_right_feedback_time = time.time()
-            self._right_image = torch.from_numpy(img_np).to(self.device).unsqueeze(0)
-
     def _left_camera_callback(self, msg):
         '''
         TODO: UPDATE
@@ -425,6 +393,7 @@ class DextrahFGPNode(Node):
 
         # Reshape into (3, height, width)
         img_np = np.transpose(img_np, (2, 0, 1))
+        
         # Scale to be between [0, 1]
         img_np /= 255.
 
@@ -594,12 +563,12 @@ class DextrahFGPNode(Node):
             'openarm_right_joint7',
             'openarm_right_finger_joint1',
         ]
-        target = [1.1, -0.35,  -0.24,  2.2, -0.4, -0.0, 0.4, 1.,
-                  -1.1, 0.35,  0.24,  2.2, 0.4, 0.0, -0.4, 1.]
+        target = [1.1, -0.35,  -0.24,  2.2, -0.4, -0.0, 0.2, 1.,
+                  -1.1, 0.35,  0.24,  2.2, 0.4, 0.0, -0.2, 1.]
         
-        # self.get_logger().info('Waiting for joint states...')
-        # while not self._joint_state_received:
-        #     time.sleep(0.1)
+        self.get_logger().info('Waiting for joint states...')
+        while not self._joint_state_received:
+            time.sleep(0.1)
 
         with self._openarm_joint_position_lock:
             current = self.robot_q[0].cpu().tolist()
@@ -677,9 +646,9 @@ class DextrahFGPNode(Node):
 
             left_tcp_pose = self.left_tcp_pose.clone()
 
-            # if (end - self.left_tcp_pose_feedback_time) > (3. * self._publish_dt):
-            #     print('no feedback from left tcp pose')
-            #     feedback_timed_out = True
+            if (end - self.left_tcp_pose_feedback_time) > (3. * self._publish_dt):
+                print('no feedback from left tcp pose')
+                feedback_timed_out = True
         
 
         with self._openarm_joint_position_lock:
@@ -687,9 +656,9 @@ class DextrahFGPNode(Node):
 
             left_robot_q = self.robot_q[:, :8].clone()
 
-            # if (end - self.openarm_feedback_time) > (3. * self._publish_dt):
-            #     print('no feedback from openarm joints')
-            #     feedback_timed_out = True
+            if (end - self.openarm_feedback_time) > (3. * self._publish_dt):
+                print('no feedback from openarm joints')
+                feedback_timed_out = True
 
         left_robot_q[:,7] = left_robot_q[:,7].abs()*0.044
         state = torch.cat(
@@ -704,62 +673,31 @@ class DextrahFGPNode(Node):
 
         # Copy camera image
         left_image = None
-        
-        # with self._left_image_lock:
-        #     end = time.time()
-        #     if (end - self.camera_left_feedback_time) > (3. * self._publish_dt * 2): 
-        #         print('no feedback from left camera')
-        #         feedback_timed_out = True
-        #     left_image = torch.clone(self._left_image)
-        # px=20
-        # _, _, lh, lw = left_image.shape
-        # left_image = torch.nn.functional.interpolate(
-        #     left_image[:, :, px:lh-px, px:lw-px],
-        #     size=(lh, lw), mode='bilinear', align_corners=False
-        # )
+        with self._left_image_lock:
+            end = time.time()
+            if (end - self.camera_left_feedback_time) > (3. * self._publish_dt * 2): 
+                print('no feedback from left camera')
+                feedback_timed_out = True
+            left_image = torch.clone(self._left_image)
+           
+        right_image = None
+        with self._right_image_lock:
+            end = time.time()
+            if (end - self.camera_right_feedback_time) > (3. * self._publish_dt * 2): 
+                print('no feedback from right camera')
+                feedback_timed_out = True
+            right_image = torch.clone(self._right_image)
 
-        # right_image = None
-        # with self._right_image_lock:
-        #     end = time.time()
-        #     if (end - self.camera_right_feedback_time) > (3. * self._publish_dt * 2):
-        #         print('no feedback from right camera')
-        #         feedback_timed_out = True
-        #     right_image = torch.clone(self._right_image)
-        # _, _, rh, rw = right_image.shape
-        # right_image = torch.nn.functional.interpolate(
-        #     right_image[:, :, px:rh-px, px:rw-px],
-        #     size=(rh, rw), mode='bilinear', align_corners=False
-        # )
-
-        return state, None, None, feedback_timed_out
+        return state, left_image, right_image, feedback_timed_out
 
     def compute_actions(self, state, left_image, right_image, transmit=True, save_pth=False):
         # with torch.no_grad():
         #     action_dict = self.dextrah_fgp.step(state, left_image, right_image)
 
-        #print(state)
-
         # img_left = (left_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
         # img_right = (right_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-        # cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_left.png", cv2.cvtColor(img_left, cv2.COLOR_RGB2BGR))
-        # cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_right.png", cv2.cvtColor(img_right, cv2.COLOR_RGB2BGR))
-        
-        # 0.29, 0.
-        # 0.35, 0.3,
-        # 0.4 0.2
-        
-        self._load_debug_left_image(
-            "/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/"+ self.debug_left_img +".png")
-        self._load_debug_right_image(
-            "/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/"+ self.debug_right_img +".png")
-        left_image = torch.clone(self._left_image)
-        right_image = torch.clone(self._right_image)
-
-        state = torch.tensor([[ 1.1034e+00, -3.4790e-01, -2.3330e-01,  2.1927e+00, -3.9690e-01,
-          9.0000e-04,  4.0010e-01,  1.9360e-03,  1.3844e-01,  2.2142e-01,
-          3.6745e-01, -3.1311e+00, -7.2582e-01, -3.4091e-02,  2.5000e-01,
-          1.5000e-01,  2.9000e-01,  5.8203e-01,  1.0000e+00, -1.0000e+00,
-          1.0000e+00, -9.1406e-01,  1.0000e+00,  1.0000e+00]], device='cuda:0')
+        # cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_left222222.png", cv2.cvtColor(img_left, cv2.COLOR_RGB2BGR))
+        # cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_right222222.png", cv2.cvtColor(img_right, cv2.COLOR_RGB2BGR))
 
         action_dict = self.dextrah_fgp.step_cuda_graph(state, left_image, right_image)
 
@@ -780,20 +718,19 @@ class DextrahFGPNode(Node):
             print('Infing!!!')
 
         object_pos = action_dict["obj_pos"]
-        print(object_pos)
+        #print(object_pos)
 
         left_tcp_pose = state[:, 8:14].clone()
 
         left_tcp_pos_targets = left_tcp_pose[:,:3] + actions[:,:3] * self.action_scale[0]
-        left_tcp_pos_targets = torch.max(torch.min(left_tcp_pos_targets, self.tcp_pose_max[:3]), self.tcp_pose_min[:3])
+        #left_tcp_pos_targets = torch.max(torch.min(left_tcp_pos_targets, self.tcp_pose_max[:3]), self.tcp_pose_min[:3])
 
         # 시뮬과 동일: axis-angle delta → quat_mul(delta, curr)
+        # Ry(180°) 켤레 변환으로 ROS→Isaac Sim 좌표계 변환 (quaternion 레벨, exact)
         euler_np = left_tcp_pose[0, 3:6].float().cpu().detach().numpy()
-        euler_corrected = euler_np.copy()
-        euler_corrected[0] *= -1.
-        euler_corrected[1] *= 1.
-        euler_corrected[2] *= -1.
-        curr_rot = R.from_euler('xyz', euler_corrected)
+        Ry180 = R.from_euler('y', np.pi)
+        q_real = R.from_euler('xyz', euler_np)
+        curr_rot = Ry180 * q_real * Ry180
 
         delta_rotvec = (actions[0, 3:6] * self.action_scale[1]).float().cpu().detach().numpy()
         delta_rot = R.from_rotvec(delta_rotvec)
@@ -851,9 +788,9 @@ class DextrahFGPNode(Node):
 
             time.sleep(1./60)
 
-        # if feedback_timed_out is True:
-        #     print('Failed to burn in policy due to lack of obs')
-        #     sys.exit()
+        if feedback_timed_out is True:
+            print('Failed to burn in policy due to lack of obs')
+            sys.exit()
 
         # Clear memory
         self.dextrah_fgp.reset_hidden_state()
@@ -891,10 +828,10 @@ class DextrahFGPNode(Node):
             # NOTE: publisher callbacks will pull action data from tensors
             # into lists themselves and publish
             # TODO: if times out again, probably should send robot to home position
-            # if not feedback_timed_out:
-            self.compute_actions(state, left_image, right_image)
-            # else:
-            #     print('not computingn actions')
+            if not feedback_timed_out:
+                self.compute_actions(state, left_image, right_image)
+            else:
+                print('not computingn actions')
 
             # Keep 60 Hz tick rate
             while (time.time() - start) < self._publish_dt:

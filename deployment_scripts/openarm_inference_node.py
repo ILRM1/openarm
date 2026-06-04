@@ -1,3 +1,16 @@
+'''how to run
+
+isaacsim isaacsim.exp.full.streaming --no-window
+export ROS_DOMAIN_ID=22
+conda activate isaac
+cd ~/isaac_ws/IsaacSim-ros_workspaces
+source build_ws/humble/humble_ws/install/local_setup.bash
+source build_ws/humble/isaac_sim_ros_ws/install/local_setup.bash
+python /home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/openarm_inference_node.py
+
+'''
+
+
 # System imports
 import os
 import sys
@@ -10,7 +23,7 @@ import argparse
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped, TransformStamped
-from sensor_msgs.msg import JointState, Image
+from sensor_msgs.msg import JointState, CompressedImage
 from tf2_ros import TransformBroadcaster
 from std_msgs.msg import Bool
 from rclpy.qos import qos_profile_sensor_data
@@ -244,10 +257,15 @@ class DextrahFGPNode(Node):
         self.batch_size = 1
         self.num_actions = 7
         self.num_obs = 24
-        self.action_scale = (0.02, 0.1, 1.)
+        self.action_scale = (0.01, 0.05, 1.)
         self.tcp_pose_min = torch.tensor([0.05, 0., 0.22, -np.pi*2, -np.pi*2, -np.pi*2], device=self.device)
         self.tcp_pose_max = torch.tensor([0.45, 0.4, 0.35, np.pi*2, np.pi*2, np.pi*2], device=self.device)
-        self.student_ckpt = "/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/dextrah_student_110000_iters.pth"
+        self.student_ckpt = \
+        "/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/dextrah_student_35000_iters.pth"
+        
+        self._image_width = 480 
+        self._image_height = 384
+        self._downsample_factor = 2
 
         # For converting ROS image messages to CV formates
         self.bridge = CvBridge()
@@ -257,16 +275,12 @@ class DextrahFGPNode(Node):
         self._right_image_lock = Lock()
         self._left_image = None
         self._right_image = None
-        self._image_height = 384
-        self._image_width = 480 
 
-        # NOTE: expecting 1/2 the resolution
-        self._downsample_factor = 2
         self.camera_left_feedback_time = time.time()
-        self.camera_left_sub = self.create_subscription(Image, '/camera/image', self._left_camera_callback, qos_profile_sensor_data)
+        self.camera_left_sub = self.create_subscription(CompressedImage, '/origin/camera/image/compressed', self._left_camera_callback, qos_profile_sensor_data)
 
         self.camera_right_feedback_time = time.time()
-        self.camera_right_sub = self.create_subscription(Image, '/wristcam_left/image',self._right_camera_callback, qos_profile_sensor_data)
+        self.camera_right_sub = self.create_subscription(CompressedImage, '/origin/wristcam_left/image/compressed', self._right_camera_callback, qos_profile_sensor_data)
 
         # Robot subscribers
         self.robot_q = torch.zeros(self.batch_size, 16, device=self.device)
@@ -284,7 +298,7 @@ class DextrahFGPNode(Node):
         self._publish_dt = 1./self._publish_rate # s
 
         # Goal to bring object to. NOTE: this should be a command in the future
-        self.object_goal = torch.tensor([0.25, 0.15, 0.3], device=self.device).repeat((self.batch_size, 1))
+        self.object_goal = torch.tensor([0.25, 0.15, 0.29], device=self.device).repeat((self.batch_size, 1))
 
         self.last_actions = torch.zeros(self.batch_size, self.num_actions, device=self.device)
 
@@ -356,8 +370,10 @@ class DextrahFGPNode(Node):
         #img_np = np.frombuffer(
         #    msg.data, dtype=np.uint8).reshape((self._image_height, self._image_width, 3)).astype(np.float32)
 
-        # Convert ROS image to numpy image with h x w x 3, and rgb ordering
-        img_np = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8').astype(np.float32)
+        # Decode compressed image (JPEG/PNG) to numpy array with h x w x 3, RGB ordering
+        np_arr = np.frombuffer(msg.data, np.uint8)
+        img_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        img_np = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB).astype(np.float32)
 
         # Interpolate down to the target image size
         img_np = cv2.resize(
@@ -382,7 +398,7 @@ class DextrahFGPNode(Node):
 
         # Reshape into (3, height, width)
         img_np = np.transpose(img_np, (2, 0, 1))
-
+        
         # Scale to be between [0, 1]
         img_np /= 255.
 
@@ -399,8 +415,10 @@ class DextrahFGPNode(Node):
         #img_np = np.frombuffer(
         #    msg.data, dtype=np.uint8).reshape((self._image_height, self._image_width, 3)).astype(np.float32)
 
-        # Convert ROS image to numpy image with h x w x 3, and rgb ordering
-        img_np = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8').astype(np.float32)
+        # Decode compressed image (JPEG/PNG) to numpy array with h x w x 3, RGB ordering
+        np_arr = np.frombuffer(msg.data, np.uint8)
+        img_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        img_np = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB).astype(np.float32)
 
         # Interpolate down to the target image size
         img_np = cv2.resize(
@@ -552,8 +570,8 @@ class DextrahFGPNode(Node):
             'openarm_right_joint7',
             'openarm_right_finger_joint1',
         ]
-        target = [1.1, -0.35,  -0.24,  2.0, -0.54, 0.0, 0.8, 1.,
-                  -1.1, 0.35,  0.24,  2.0, 0.54, 0.0, -0.8, 1.]
+        target = [1.1, -0.35,  -0.24,  2.2, -0.4, -0.0, 0.2, 1.,
+                  -1.1, 0.35,  0.24,  2.2, 0.4, 0.0, -0.2, 1.]
         
         self.get_logger().info('Waiting for joint states...')
         while not self._joint_state_received:
@@ -648,8 +666,9 @@ class DextrahFGPNode(Node):
             if (end - self.openarm_feedback_time) > (3. * self._publish_dt):
                 print('no feedback from openarm joints')
                 feedback_timed_out = True
-
+        
         left_robot_q[:,7] = left_robot_q[:,7].abs()*0.044
+       
         state = torch.cat(
             (
                 left_robot_q,
@@ -668,7 +687,7 @@ class DextrahFGPNode(Node):
                 print('no feedback from left camera')
                 feedback_timed_out = True
             left_image = torch.clone(self._left_image)
-
+           
         right_image = None
         with self._right_image_lock:
             end = time.time()
@@ -683,12 +702,10 @@ class DextrahFGPNode(Node):
         # with torch.no_grad():
         #     action_dict = self.dextrah_fgp.step(state, left_image, right_image)
 
-        #print(state)
-
-        # img_left = (left_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-        # img_right = (right_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-        # cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_left.png", cv2.cvtColor(img_left, cv2.COLOR_RGB2BGR))
-        # cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_right.png", cv2.cvtColor(img_right, cv2.COLOR_RGB2BGR))
+        img_left = (left_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+        img_right = (right_image[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+        cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_left55.png", cv2.cvtColor(img_left, cv2.COLOR_RGB2BGR))
+        cv2.imwrite("/home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/debug_right55.png", cv2.cvtColor(img_right, cv2.COLOR_RGB2BGR))
 
         action_dict = self.dextrah_fgp.step_cuda_graph(state, left_image, right_image)
 
@@ -709,20 +726,18 @@ class DextrahFGPNode(Node):
             print('Infing!!!')
 
         object_pos = action_dict["obj_pos"]
-        print(object_pos)
+        #print(object_pos)
 
         left_tcp_pose = state[:, 8:14].clone()
 
         left_tcp_pos_targets = left_tcp_pose[:,:3] + actions[:,:3] * self.action_scale[0]
-        left_tcp_pos_targets = torch.max(torch.min(left_tcp_pos_targets, self.tcp_pose_max[:3]), self.tcp_pose_min[:3])
+        #left_tcp_pos_targets = torch.max(torch.min(left_tcp_pos_targets, self.tcp_pose_max[:3]), self.tcp_pose_min[:3])
 
         # 시뮬과 동일: axis-angle delta → quat_mul(delta, curr)
         euler_np = left_tcp_pose[0, 3:6].float().cpu().detach().numpy()
-        euler_corrected = euler_np.copy()
-        euler_corrected[0] *= -1.
-        euler_corrected[1] *= 1.
-        euler_corrected[2] *= -1.
-        curr_rot = R.from_euler('xyz', euler_corrected)
+        Ry180 = R.from_euler('y', np.pi)
+        q_real = R.from_euler('xyz', euler_np)
+        curr_rot = Ry180 * q_real * Ry180
 
         delta_rotvec = (actions[0, 3:6] * self.action_scale[1]).float().cpu().detach().numpy()
         delta_rot = R.from_rotvec(delta_rotvec)

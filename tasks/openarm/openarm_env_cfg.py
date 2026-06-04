@@ -125,7 +125,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     sim_dt = 1/120.
     decimation = 12 # 10 Hz
     num_sim_steps_to_render=12 # renders every 12 sim steps, so 10 Hz
-    episode_length_s = 15.
+    episode_length_s = 20.
     num_actions = 7
     success_timeout = 2.
     distillation = False
@@ -138,9 +138,9 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     observation_space = 0
     action_space = 0
 
-    #action_scale = (0.01, 0.05, 0.044)
-    action_scale = (0.02, 0.1, 0.044)
-    #action_scale = (0.04, 0.2, 0.044)
+    action_scale = (0.01, 0.05, 0.044)
+    #action_scale = (0.015, 0.075, 0.044)
+    #action_scale = (0.02, 0.1, 0.044)
     
     asymmetric_obs = True
     obs_type = "full"
@@ -175,18 +175,18 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
                     "openarm_left_joint1": 1.1,
                     "openarm_left_joint2": -0.35,
                     "openarm_left_joint3": -0.24,
-                    "openarm_left_joint4": 2.0,
-                    "openarm_left_joint5": -0.54,
+                    "openarm_left_joint4": 2.2,
+                    "openarm_left_joint5": -0.4,
                     "openarm_left_joint6": 0.,
-                    "openarm_left_joint7": 0.8,
+                    "openarm_left_joint7": 0.2,
 
                     "openarm_right_joint1": -1.1,
                     "openarm_right_joint2": 0.35,
                     "openarm_right_joint3": 0.24,
-                    "openarm_right_joint4": 2.0,
-                    "openarm_right_joint5": 0.54,
-                    "openarm_right_joint6": 0.0,
-                    "openarm_right_joint7": -0.8,
+                    "openarm_right_joint4": 2.2,
+                    "openarm_right_joint5": 0.4,
+                    "openarm_right_joint6": 0.,
+                    "openarm_right_joint7": -0.2,
 
                     "openarm_left_finger_joint.*": 0.044,
                     "openarm_right_finger_joint.*": 0.044,
@@ -215,14 +215,21 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     scene_objects_usd_path = os.path.join(root_path, "assets/scene_objects/")
     primitives_usd_path = os.path.join(root_path, "assets/primitives/USD/")
 
-    table_texture_dir = os.path.join(
-        root_path, "assets", "curated_table_textures"
-    )
     dome_light_dir = os.path.join(
         root_path, "assets", "dome_light_textures"
     )
+    # table_texture_dir = os.path.join(
+    #     root_path, "assets", "curated_table_textures"
+    # )
+    # metropolis_asset_dir = os.path.join(
+    #     root_path, "assets", "object_textures"
+    # )
+
+    table_texture_dir = os.path.join(
+        root_path, "assets", "background_imgs/voc_resized"
+    )
     metropolis_asset_dir = os.path.join(
-        root_path, "assets", "object_textures"
+        root_path, "assets",  "object_textures"
     )
 
     object_cfg: RigidObjectCfg = RigidObjectCfg(
@@ -242,7 +249,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
                 max_depenetration_velocity=1000.0,
             ),
             scale=(1., 1., 1.),
-            mass_props=sim_utils.MassPropertiesCfg(density=500.0),
+            mass_props=sim_utils.MassPropertiesCfg(density=30.0),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=(-0.5, 0., 0.5),
@@ -257,42 +264,41 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
             ),
-            scale=(0.7, 0.45, 1.),
+            scale=(2.2, 1.73, 1.),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
             # pos=(0.05 + 0.725 / 2,
             #      0.668 - 1.16 / 2,
             #      0.21 - 0.03 / 2),
-            pos=(0.25,
-                 0.2,
-                 0.21 - 0.03 / 2),
-            rot=(1.0, 0.0, 0.0, 0.0)),
+            pos=(0.7,
+                 0.,
+                 0.20 - 0.03 / 2),
+            rot=(1.0, 0.0, 0.0, 0.0)), 
     )
     # distillation related parameters
     img_width = 120  
     img_height = 96
-    # img_width = 480  
-    # img_height = 384
+    # img_width = 240  
+    # img_height = 192
 
     distil_depth_width = 120
     distil_depth_height = 96
 
     camera_rand_rot_range = 3
-    camera_rand_pos_range = 0.025
+    camera_rand_pos_range = 0.03
 
     # head cam
-    head_camera_pos = [0.105, 0.0, 0.515]
-    head_camera_rot = [0.68458, 0.17705, -0.17705, -0.68458]
+    head_camera_pos = [0.10, 0.0, 0.52]
+    head_camera_rot = [0.68301, 0.18301, -0.18301, -0.68301]
     head_img_width = img_width     
     head_img_height = img_height
     # head_img_width = 240  
     # head_img_height = 192           
     fps = 30.0
 
-    hfov = float(np.deg2rad(120.0))         # Horizontal field of view
-    vfov = float(np.deg2rad(93.0))          # Vertical field of view
-    efl_mm = 2.9144          # Effective focal length
-    max_distortion = -0.793         # -3% barrel (negligible → pinhole is accurate)
+    hfov = float(np.deg2rad(115))         # Horizontal field of view
+    vfov = float(np.deg2rad(90.3))          # Vertical field of view
+    efl_mm = 3.          # Effective focal length
 
     FX = float((head_img_width  / 2.0) / np.tan(hfov / 2.0))
     FY = float((head_img_height / 2.0) / np.tan(vfov / 2.0))
@@ -328,7 +334,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
 
     # wrist cam
     #wrist_camera_pos = [0.1, 0., 0.1201]
-    wrist_camera_pos = [0.07, 0., 0.125]
+    wrist_camera_pos = [0.07, 0., 0.13]
     wrist_camera_rot = [0.24184, 0.66446, 0.66446, 0.24184]
     wrist_img_width = img_width      
     wrist_img_height = img_height   
@@ -336,10 +342,9 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # wrist_img_height = 192         
     fps = 30.0
 
-    hfov = float(np.deg2rad(100.0))         # Horizontal field of view
-    vfov = float(np.deg2rad(78.0))          # Vertical field of view
-    efl_mm = 3.43          # Effective focal length
-    max_distortion = -0.463         # -3% barrel (negligible → pinhole is accurate)
+    hfov = float(np.deg2rad(98.96))         # Horizontal field of view
+    vfov = float(np.deg2rad(77.24))          # Vertical field of view
+    efl_mm = 3.55          # Effective focal length
 
     FX = float((wrist_img_width  / 2.0) / np.tan(hfov / 2.0))
     FY = float((wrist_img_height / 2.0) / np.tan(vfov / 2.0))
@@ -369,8 +374,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         width=wrist_img_width,   
         height=wrist_img_height,   
-        data_types=["rgb",       
-                    "depth",],
+        data_types=["rgb", "depth",],
         #update_period=1.0 / fps,  
     )
 
@@ -390,8 +394,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         width=wrist_img_width,   
         height=wrist_img_height,   
-        data_types=["rgb",       
-                    "depth",],
+        data_types=["rgb", "depth",],
         #update_period=1.0 / fps,  
     )
 
@@ -436,10 +439,10 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     object_height_thresh = 0.15
 
     # Object spawning params
-    x_center = 0.1
-    x_width = 0.3
-    y_center = 0.25
-    y_width = 0.2
+    x_center = 0.2
+    x_width = 0.2
+    y_center = 0.2
+    y_width = 0.15
 
     # DR Controls
     enable_adr = True
@@ -496,13 +499,13 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     object_scale_min = 0.5
     deactivate_object_scaling = True
 
-    aux_coeff = 1.
+    aux_coeff = 10.
 
     # Dictionary of custom parameters for ADR
     # NOTE: first number in range is the starting value, second number is terminal value
     adr_custom_cfg_dict = {
         "object_wrench": {
-            "max_linear_accel": (0., 9.)
+            "max_linear_accel": (0., 8.)
         },
         "object_spawn": {
             "x_width_spawn": (0., x_width),
@@ -550,7 +553,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     cam_matrix[2, 3] = -1.
     cam_matrix[3, 2] = 1.e-3
     d_min = 0.01
-    d_max = 5.
+    d_max = 1.
     depth_randomization_cfg_dict = {
         # Dropout and random noise blob parameters
         "pixel_dropout_and_randu": {

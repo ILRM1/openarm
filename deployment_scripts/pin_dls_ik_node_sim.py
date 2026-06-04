@@ -1,3 +1,11 @@
+'''how to run
+
+export ROS_DOMAIN_ID=22
+conda activate ros_env
+python /home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/deployment_scripts/pin_dls_ik_node_sim.py
+
+'''
+
 #!/usr/bin/env python3
 from threading import Lock
 from typing import Optional
@@ -15,15 +23,26 @@ from sensor_msgs.msg import JointState
 URDF_PATH           = "/home/neubility-sim/isaac_ws/openarm_description/urdf/robot/openarm_bimanual.urdf"
 EE_FRAME            = "openarm_left_hand_tcp"
 JOINT_NAMES         = [f"openarm_left_joint{i}" for i in range(1, 8)]
+RIGHT_JOINT_NAMES   = [f"openarm_right_joint{i}" for i in range(1, 8)]
 LAMBDA_VAL          = 0.01
 POSITION_ONLY       = False
-CONTROL_RATE        = 10.0      # Hz
+CONTROL_RATE        = 10.      # Hz (IK 계산 주기)
+N_INTERP_STEPS      = 1        # IK 타겟을 N단계로 나눠 publish (진동 감소)
+PUBLISH_RATE        = CONTROL_RATE * N_INTERP_STEPS  # 50 Hz
 
-JOINT_STATE_TOPIC   = "/joint_states"
-TARGET_POSE_TOPIC   = "/left/ik_target_pose"
-GRIPPER_TOPIC       = "/left/gripper_command"
-PUBLISH_TOPIC       = "/arm/command"
-GRIPPER_JOINT_NAME  = "openarm_left_finger_joint1"
+# Anti-vibration
+ALPHA               = 1.    # IK 스텝 게인 (0.1~1.0, 낮을수록 느리지만 안정)
+MAX_JOINT_STEP      = 0.3    # rad/step 최대 관절 이동량
+MIN_ERROR           = 0.    # 데드존: 이 이하 에러면 현재 각도 유지
+ALPHA_FILTER        = 0.3    # EMA 필터 계수 (낮을수록 더 smooth)
+
+JOINT_STATE_TOPIC        = "/joint_states"
+TARGET_POSE_TOPIC        = "/left/ik_target_pose"
+GRIPPER_TOPIC            = "/left/gripper_command"
+RIGHT_GRIPPER_TOPIC      = "/right/gripper_command"
+PUBLISH_TOPIC            = "/arm/command"
+GRIPPER_JOINT_NAME       = "openarm_left_finger_joint1"
+RIGHT_GRIPPER_JOINT_NAME = "openarm_right_finger_joint1"
 
 # ─────────────────────────────────────────
 # IK solver (numpy)
@@ -102,13 +121,19 @@ class DifferentialIKNode(Node):
         self.latest_target_pose: Optional[PoseStamped] = None
         self.latest_gripper_pos: float = 0.0
         self.name_to_idx: dict = {}
+        self.q_filtered: Optional[np.ndarray] = None
+
+        # 보간 상태
+        self._q_interp_start: Optional[np.ndarray] = None
+        self._q_interp_target: Optional[np.ndarray] = None
+        self._interp_step: int = 0
 
         # ROS2
         self.create_subscription(JointState, JOINT_STATE_TOPIC, self._joint_cb, 10)
         self.create_subscription(PoseStamped, TARGET_POSE_TOPIC, self._target_cb, 10)
         self.create_subscription(JointState, GRIPPER_TOPIC, self._gripper_cb, 10)
         self.pub = self.create_publisher(JointState, PUBLISH_TOPIC, 10)
-        self.create_timer(1.0 / CONTROL_RATE, self._control_loop)
+        self.create_timer(1.0 / PUBLISH_RATE, self._control_loop)
 
         self.get_logger().info(
             f"DifferentialIK (pinocchio) started | EE: {EE_FRAME} | joints: {JOINT_NAMES}"
@@ -169,15 +194,30 @@ class DifferentialIKNode(Node):
         # Pose error → DLS → new joint command
         pos_err, aa_err = compute_pose_error(ee_pos, ee_quat, tgt_pos, tgt_quat)
         pose_error = np.concatenate([pos_err, aa_err]) if not POSITION_ONLY else pos_err
-        q_cmd = q_ctrl + compute_dls(pose_error, J)
+
+        if np.linalg.norm(pose_error) > MIN_ERROR:
+            dq = compute_dls(pose_error, J)
+            dq = np.clip(dq, -MAX_JOINT_STEP, MAX_JOINT_STEP)
+            q_raw = q_ctrl + ALPHA * dq
+        else:
+            q_raw = q_ctrl
+
+        # EMA 필터
+        if self.q_filtered is None:
+            self.q_filtered = q_raw.copy()
+        else:
+            self.q_filtered = ALPHA_FILTER * q_raw + (1.0 - ALPHA_FILTER) * self.q_filtered
+        q_cmd = self.q_filtered
+
+        #q_cmd = q_ctrl + compute_dls(pose_error, J)
 
         # Publish
         with self._lock:
             gripper_pos = self.latest_gripper_pos
         out = JointState()
         out.header.stamp = self.get_clock().now().to_msg()
-        out.name     = JOINT_NAMES + [GRIPPER_JOINT_NAME]
-        out.position = q_cmd.tolist() + [gripper_pos]
+        out.name     = JOINT_NAMES + [GRIPPER_JOINT_NAME] + RIGHT_JOINT_NAMES + [RIGHT_GRIPPER_JOINT_NAME]
+        out.position = q_cmd.tolist() + [gripper_pos] + [-1.1, 0.35,  0.24,  2.2, 0.4, 0.0, -0.2, 1.]
         self.pub.publish(out)
 
 

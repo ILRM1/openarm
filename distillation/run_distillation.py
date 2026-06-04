@@ -6,12 +6,10 @@ RUN
  LIVESTREAM=2 ENABLE_CAMERAS=1 CUDA_VISIBLE_DEVICES=0 python run_distillation.py \
             --headless \
             --task=Openarm \
-            --num_envs 256 env.distillation=True \
+            --num_envs 64 env.distillation=True \
             --enable_cameras env.simulate_stereo=True \
-            --teacher /home/namyeong/openarm/dextrah_lab/cleanrl/runs/ppo_openarm_lstm_step2041446400.pth  \
-            env.img_aug_type="rgb" \
-            env.aux_coeff=10.
-
+            --teacher /home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/distillation/ppo_openarm_lstm_step530841600.pth  \
+            --student /home/neubility-sim/isaac_ws/DEXTRAH_CAM/dextrah_lab/distillation/runs/Openarm_27-10-26-04/nn/dextrah_student_310000_iters.pth
 """
 
 import argparse
@@ -35,8 +33,9 @@ parser.add_argument(
 )
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument("--teacher", type=str, default=None, help="Teacher checkpoint to use")
+parser.add_argument("--student", type=str, default=None, help="Student checkpoint to use" )
 parser.add_argument("--play_policy", type=bool, default=False, help="Play a distilled policy.")
-parser.add_argument("--data_aug", action="store_true", default=False, help="Whether to use data augmentation for student")
+parser.add_argument("--data_aug", action="store_true", default=True, help="Whether to use data augmentation for student")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -139,11 +138,11 @@ def main(env_cfg, agent_cfg: dict):
         "rl_games_ppo_lstm_cfg.yaml"
     )
    
-    student_ckpt = "pretrained_ckpts/student_1_flipped.pth"
-    student_ckpt = os.path.join(
-        parent_path,
-        student_ckpt
-    )
+    # student_ckpt = "pretrained_ckpts/student_1_flipped.pth"
+    # student_ckpt = os.path.join(
+    #     parent_path,
+    #     student_ckpt
+    # )
     # depth
     # student_ckpt = "/home/ritviks/workspace/git/dextrah_lab/dextrah_lab/distillation/runs/Dextrah-Kuka-Allegro_01-00-25-56/nn/dextrah_student_30000_iters.pth"
     # stereo rgb visdex
@@ -154,12 +153,12 @@ def main(env_cfg, agent_cfg: dict):
     #         teacher_ckpt = os.path.join(parent_path, "pretrained_ckpts", args_cli.teacher)
     #     else:
     #         teacher_ckpt = os.path.join(parent_path, "pretrained_ckpts/new_teacher.pth")
-    student_ckpt = None
+    student_ckpt = args_cli.student
     # student_ckpt = "/home/ritviks/workspace/git/distillation_results/new_obj_prims_seed_12.pth"
     teacher_ckpt = args_cli.teacher
-
+   
     if rank == 0:
-        train_dir = "runs"
+        train_dir = str(pathlib.Path(__file__).parent.resolve() / "runs")
         experiment_name = (
             args_cli.task
             + datetime.now().strftime("_%d-%H-%M-%S")

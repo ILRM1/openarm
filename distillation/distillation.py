@@ -115,15 +115,15 @@ class Agent(nn.Module):
     def __init__(self, envs):
         super().__init__()
 
-        self.img_w, self.img_h = int(envs.cfg.head_img_width/2), int(envs.cfg.head_img_height/2)
+        self.img_w, self.img_h = envs.cfg.distil_depth_width, envs.cfg.distil_depth_height
         self.proprio_dim = envs.cfg.num_teacher_observations
 
         # Separate CNNs for head and wrist
         self.head_cnn, self.head_lns, self.head_pool = self._make_cnn()
         self.wrist_cnn, self.wrist_lns, self.wrist_pool = self._make_cnn()
 
-        self.head_fc = nn.Linear(256, 32)
-        self.wrist_fc = nn.Linear(256, 32)
+        self.head_fc = nn.Linear(128, 32)
+        self.wrist_fc = nn.Linear(128, 32)
 
         self.lstm = nn.LSTM(32 + 32 + self.proprio_dim, 1024, num_layers=2)
         for name, param in self.lstm.named_parameters():
@@ -160,7 +160,7 @@ class Agent(nn.Module):
     def _cnn_forward(self, x, convs, lns, pool, fc):
         for conv, ln in zip(convs, lns):
             x = F.relu(ln(conv(x)))
-        
+        x=pool(x)
         x = x.flatten(1)
         x = fc(x)
 
@@ -380,21 +380,25 @@ class Dagger:
                     ),
                     "height": self.ov_env.cfg.img_height,
                     "width": self.ov_env.cfg.img_width,
-                    "aug_prob": 0.5
+                    "aug_prob": 0.9
                 },
                 color_cfg={
                     "aug_prob": 1.,
                     "saturation_range": [0.5, 1.5],
                     "contrast_range": [0.5, 1.5],
                     "brightness_range": [0.5, 1.5],
-                    "hue_range": [-0.15, 0.15]
+                    "hue_range": [-0.5, 0.5]
                 },
                 motion_blur_cfg={
                     "aug_prob": 0.1,
                     "kernel_sizes": [9, 11, 13, 15, 17],
                     "angle_range": [0, 2*np.pi],
                     "direction_range": [-1, 1]
-                }
+                },
+                gaussian_noise_cfg = {
+                    "aug_prob": 1.,        # 적용 확률
+                    "std_range": [0.01, 0.02]  # std를 이 범위에서 랜덤 샘플
+                },
             )
             voc_imgs_dir = os.path.join(
                 str(pathlib.Path(__file__).parent.parent.resolve()),

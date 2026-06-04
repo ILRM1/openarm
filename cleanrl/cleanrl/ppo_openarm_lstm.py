@@ -204,12 +204,12 @@ class Agent(nn.Module):
         
         proprio, head_depth, wrist_L_depth = _split_obs(x, self.img_h, self.img_w, self.proprio_dim)
 
-        import cv2
-        img = head_depth[0, 0].detach().cpu().numpy()
-        # normalize to 0~255
-        img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
-        img_uint8 = (img_norm * 255).astype("uint8")
-        cv2.imwrite("depth_debug.png", img_uint8)
+        # import cv2
+        # img = wrist_L_depth[0, 0].detach().cpu().numpy()
+        # # normalize to 0~255
+        # img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
+        # img_uint8 = (img_norm * 255).astype("uint8")
+        # cv2.imwrite("depth_debug.png", img_uint8)
 
         head_cnn_out = self._cnn_forward(head_depth, self.head_cnn, self.head_lns, self.head_pool, self.head_fc)
         wrist_cnn_out = self._cnn_forward(wrist_L_depth, self.wrist_cnn, self.wrist_lns, self.wrist_pool, self.wrist_fc)
