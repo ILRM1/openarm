@@ -115,8 +115,8 @@ class EventCfg:
 @configclass
 class OpenarmEnvCfg(DirectRLEnvCfg):
     # Placeholder for objects_dir which targets the directory of objects for training
-    objects_dir = "primitives"
-    valid_objects_dir = ["primitives"]
+    objects_dir = "handbag"
+    valid_objects_dir = ["handbag"]
 
     # Toggle for using cuda graph
     use_cuda_graph = False
@@ -249,7 +249,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
                 max_depenetration_velocity=1000.0,
             ),
             scale=(1., 1., 1.),
-            mass_props=sim_utils.MassPropertiesCfg(density=30.0),
+            mass_props=sim_utils.MassPropertiesCfg(density=500.0),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=(-0.5, 0., 0.5),
@@ -495,9 +495,9 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     #wrench_prob_per_rollout = 0. # NOTE: currently not used
 
     # Object scaling
-    object_scale_max = 1.75
-    object_scale_min = 0.5
-    deactivate_object_scaling = True
+    object_scale_max = 1.1
+    object_scale_min = 0.9
+    deactivate_object_scaling = False
 
     aux_coeff = 10.
 
@@ -505,7 +505,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # NOTE: first number in range is the starting value, second number is terminal value
     adr_custom_cfg_dict = {
         "object_wrench": {
-            "max_linear_accel": (0., 8.)
+            "max_linear_accel": (0., 10.)
         },
         "object_spawn": {
             "x_width_spawn": (0., x_width),

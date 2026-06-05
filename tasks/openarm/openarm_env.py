@@ -253,7 +253,7 @@ class OpenarmEnv(DirectRLEnv):
         # add robot, objects
         # TODO: add goal objects?
         self.robot = Articulation(self.cfg.robot_cfg)
-        self.table = RigidObject(self.cfg.table_cfg)
+        #self.table = RigidObject(self.cfg.table_cfg)
         # add ground plane
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         # clone and replicate (no need to filter for this environment)
@@ -261,7 +261,7 @@ class OpenarmEnv(DirectRLEnv):
 
         # add articultion to scene - we must register to scene to randomize with EventManager
         self.scene.articulations["robot"] = self.robot
-        self.scene.rigid_objects["table"] = self.table
+        #self.scene.rigid_objects["table"] = self.table
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=1000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
@@ -281,11 +281,13 @@ class OpenarmEnv(DirectRLEnv):
 
         # Create the objects for grasping
         # self._setup_metropolis_objects()
-        if self.cfg.distillation:
-            self._setup_objects()
-        else:
-            self.object = RigidObject(self.cfg.object_cfg)
-            self.scene.rigid_objects["object"] = self.object
+        # if self.cfg.distillation:
+        #     self._setup_objects()
+        # else:
+        #     self.object = RigidObject(self.cfg.object_cfg)
+        #     self.scene.rigid_objects["object"] = self.object
+
+        self._setup_objects()
 
         if self.cfg.distillation:
             import omni.replicator.core as rep
@@ -336,11 +338,11 @@ class OpenarmEnv(DirectRLEnv):
 
         # List all subdirectories in the target directory
         sub_dirs = sorted(os.listdir(objects_full_path))
-
+        
         # Filter out all subdirectories deeper than one level
         sub_dirs = [object_name for object_name in sub_dirs if os.path.isdir(
             os.path.join(objects_full_path, object_name))]
-
+     
         self.num_unique_objects = len(sub_dirs)
 
         # This creates a 1D tensor array of length self.num_envs with values:
@@ -352,10 +354,6 @@ class OpenarmEnv(DirectRLEnv):
         #     self.num_unique_objects
         # ).to(self.device)
         self.multi_object_idx = torch.remainder(torch.arange(self.num_envs), self.num_unique_objects).to(self.device)
-
-        # Create one-hot encoding of object ID for usage as feature input
-        self.multi_object_idx_onehot = F.one_hot(
-            self.multi_object_idx, num_classes=self.num_unique_objects).float()
 
         stage = omni.usd.get_context().get_stage()
         self.object_mat_prims = list()
@@ -432,23 +430,23 @@ class OpenarmEnv(DirectRLEnv):
                     #       self.object_scales[self.device_index],
                     #       self.object_scales[self.device_index]),
                     # NOTE: density is that of birchwood. might want to see the effect
-                    mass_props=sim_utils.MassPropertiesCfg(density=30.0),
+                    mass_props=sim_utils.MassPropertiesCfg(density=500.0),
                 ),
                 init_state=RigidObjectCfg.InitialStateCfg(
-                    pos=(-0.5, 0., 0.5),
+                    pos=(0.1, 0., 0.01),
                     rot=(1.0, 0.0, 0.0, 0.0)),
                     #rot=(0.9848, 0.0, 0.0, 0.1736)),
             )
             # add object to scene
             object_for_grasping = RigidObject(object_cfg)
-
+           
             # remove baseLink
             set_prim_attribute_value(
                 prim_path=prim_path+"/baseLink",
                 attribute_name="physxArticulation:articulationEnabled",
                 value=False
             )
-
+           
             # Get shaders
             prim = stage.GetPrimAtPath(prim_path)
             self.object_mat_prims.append(prim.GetChildren()[0].GetChildren()[0].GetChildren()[0])
@@ -524,7 +522,19 @@ class OpenarmEnv(DirectRLEnv):
         self.object = RigidObject(multi_object_cfg)
         self.scene.rigid_objects["object"] = self.object
 
+        from isaaclab.sim.views import XformPrimView
+
+        self.grasp_point_view = XformPrimView(
+            prim_path="/World/envs/env_.*/object/.*/baseLink/grasp_point",
+            device=self.device,
+        )
+
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
+
+        grasp_pos, grasp_quat = self.grasp_point_view.get_world_poses()
+        print('grasp pos', grasp_pos-self.scene.env_origins)
+
+
         # Find the current global minimum adr increment
         local_adr_increment = self.local_adr_increment.clone()
         # Query for the global minimum adr increment across all GPUs
@@ -751,8 +761,8 @@ class OpenarmEnv(DirectRLEnv):
         out_of_reach = object_outside_upper_x | \
                        object_outside_lower_x | \
                        object_outside_upper_y | \
-                       object_outside_lower_y | \
-                       object_too_low 
+                       object_outside_lower_y
+                    #    object_too_low 
                     #    tip_outside_upper_x | \
                     #    tip_outside_lower_x | \
                     #    tip_outside_upper_y | \
@@ -810,7 +820,7 @@ class OpenarmEnv(DirectRLEnv):
         object_start_state[env_ids, 0] = self.cfg.x_center + x_width_spawn * (1.5*torch.rand(num_ids, device=self.device) - 0.5)
         object_start_state[env_ids, 1] = self.cfg.y_center + y_width_spawn * 2.*(torch.rand(num_ids, device=self.device)-0.5)
         # Keep drop height the same
-        object_start_state[env_ids, 2] = 0.235
+        object_start_state[env_ids, 2] = 0.03
 
         # Randomize rotation
 #        rot_noise = sample_uniform(-1.0, 1.0, (num_ids, 2), device=self.device)  # noise for X and Y rotation
@@ -1287,8 +1297,8 @@ class OpenarmEnv(DirectRLEnv):
         self.object_vel = self.object.data.root_vel_w
 
         # Compute table data
-        self.table_pos = self.table.data.root_pos_w - self.scene.env_origins
-        self.table_pos_z = self.table_pos[:, 2]
+        # self.table_pos = self.table.data.root_pos_w - self.scene.env_origins
+        # self.table_pos_z = self.table_pos[:, 2]
 
     def compute_intermediate_reward_values(self):
         # Calculate distance between object and its goal position
