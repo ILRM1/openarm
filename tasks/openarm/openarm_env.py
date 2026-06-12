@@ -36,6 +36,7 @@ from isaacsim.core.utils.prims import set_prim_attribute_value
 from isaaclab.controllers import DifferentialIKController, DifferentialIKControllerCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_euler_xyz, euler_xyz_from_quat
+from isaaclab.sim.views import XformPrimView
 
 from .openarm_env_cfg import OpenarmEnvCfg
 
@@ -522,7 +523,7 @@ class OpenarmEnv(DirectRLEnv):
         self.object = RigidObject(multi_object_cfg)
         self.scene.rigid_objects["object"] = self.object
 
-        from isaaclab.sim.views import XformPrimView
+
 
         self.grasp_point_view = XformPrimView(
             prim_path="/World/envs/env_.*/object/.*/baseLink/grasp_point",

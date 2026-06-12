@@ -1,0 +1,1366 @@
+#usda 1.0
+(
+    customLayerData = {
+        dictionary cameraSettings = {
+            dictionary Front = {
+                double3 position = (5, 0, 0)
+                double radius = 5
+            }
+            dictionary Perspective = {
+                double3 position = (1.8362738323971124, 0.9682130981084407, 1.027240078222793)
+                double3 target = (-3.5035123270742687, -2.243497896428945, -1.5490355763174497)
+            }
+            dictionary Right = {
+                double3 position = (0.07296363492297321, -5, 0.12620521719299488)
+                double radius = 0.28083651065826415
+            }
+            dictionary Top = {
+                double3 position = (0, 0, 5)
+                double radius = 5
+            }
+            string boundCamera = "/OmniverseKit_Persp"
+        }
+        dictionary metricsAssembler = {
+            dictionary "/openarm/camera_brk_pai" = {
+            }
+            int version = 1
+        }
+        dictionary omni_layer = {
+            string authoring_layer = "./openarm_bimanual_tether.usd"
+        }
+        dictionary renderSettings = {
+        }
+    }
+    defaultPrim = "openarm"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "openarm" (
+    delete apiSchemas = ["IsaacRobotAPI"]
+    prepend apiSchemas = ["IsaacRobotAPI"]
+    variants = {
+        string Physics = "PhysX"
+        string Sensor = "Sensors"
+    }
+    prepend variantSets = ["Physics", "Sensor"]
+)
+{
+    string isaac:namespace (
+        displayName = "Namespace"
+        doc = "Namespace of the prim in Isaac Sim"
+    )
+    rel isaac:physics:robotJoints = [
+        </openarm/joints/openarm_left_joint1>,
+        </openarm/joints/openarm_left_joint2>,
+        </openarm/joints/openarm_left_joint3>,
+        </openarm/joints/openarm_left_joint4>,
+        </openarm/joints/openarm_left_joint5>,
+        </openarm/joints/openarm_left_joint6>,
+        </openarm/joints/openarm_left_ee_tcp_joint>,
+        </openarm/joints/openarm_right_joint1>,
+        </openarm/joints/openarm_right_joint2>,
+        </openarm/joints/openarm_right_joint3>,
+        </openarm/joints/openarm_right_joint4>,
+        </openarm/joints/openarm_right_joint5>,
+        </openarm/joints/openarm_right_joint6>,
+        </openarm/joints/openarm_right_ee_tcp_joint>,
+        </openarm/root_joint>,
+        </openarm/left_hand>,
+        </openarm/right_hand>,
+    ]
+    rel isaac:physics:robotLinks = [
+        </openarm/openarm_body_link>,
+        </openarm/openarm_body_link/openarm_left_link0>,
+        </openarm/openarm_body_link/openarm_right_link0>,
+        </openarm/openarm_left_link1>,
+        </openarm/openarm_left_link2>,
+        </openarm/openarm_left_link3>,
+        </openarm/openarm_left_link4>,
+        </openarm/openarm_left_link5>,
+        </openarm/openarm_left_link6>,
+        </openarm/openarm_left_ee_tcp>,
+        </openarm/openarm_right_link1>,
+        </openarm/openarm_right_link2>,
+        </openarm/openarm_right_link3>,
+        </openarm/openarm_right_link4>,
+        </openarm/openarm_right_link5>,
+        </openarm/openarm_right_link6>,
+        </openarm/openarm_right_ee_tcp>,
+        </openarm/left_hand>,
+        </openarm/right_hand>,
+    ]
+    quatd xformOp:orient = (1, 0, 0, 0)
+    double3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate = (0, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+    over "openarm_left_right_finger" (
+        active = false
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+        double3 xformOp:translate = (0, 0.15849803388118744, 0.1468995064496994)
+
+        over "collisions" (
+            prepend apiSchemas = ["PhysxTriangleMeshSimplificationCollisionAPI", "PhysxConvexDecompositionCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "convexDecomposition"
+        }
+    }
+
+    over "openarm_left_left_finger" (
+        active = false
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+
+        over "collisions" (
+            prepend apiSchemas = ["PhysxTriangleMeshSimplificationCollisionAPI", "PhysxConvexDecompositionCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "convexDecomposition"
+        }
+    }
+
+    over "openarm_right_right_finger" (
+        active = false
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+
+        over "collisions" (
+            prepend apiSchemas = ["PhysxTriangleMeshSimplificationCollisionAPI", "PhysxConvexDecompositionCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "convexDecomposition"
+        }
+    }
+
+    over "openarm_right_left_finger" (
+        active = false
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+
+        over "collisions" (
+            prepend apiSchemas = ["PhysxTriangleMeshSimplificationCollisionAPI", "PhysxConvexDecompositionCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "convexDecomposition"
+        }
+    }
+
+    over "openarm_body_link" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+
+        over "openarm_right_link0" (
+            prepend apiSchemas = ["IsaacLinkAPI"]
+        )
+        {
+        }
+
+        over "openarm_left_link0" (
+            prepend apiSchemas = ["IsaacLinkAPI"]
+        )
+        {
+        }
+    }
+
+    over "openarm_left_link1" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_left_link2" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_left_link3" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_left_link4" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "openarm_left_link5" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_left_link6" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+        quatd xformOp:orient = (0.0000017881393430999537, 0.9999999999984013, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0.03750000149011612, 0.15349844098091125, 0.2619995176792145)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+    }
+
+    over "openarm_left_link7" (
+        active = false
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+        quatd xformOp:orient = (0.0000017881393430999537, 0.9999999999984013, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0.15349844098091125, 0.2619995176792145)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        over "visuals"
+        {
+            token visibility = "inherited"
+        }
+
+        over "collisions"
+        {
+            token visibility = "inherited"
+        }
+    }
+
+    over "openarm_left_hand" (
+        active = false
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_left_ee_tcp" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+        double3 xformOp:translate = (0, 0.128, 0.15)
+    }
+
+    over "openarm_right_link1" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "openarm_right_link2" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "openarm_right_link3" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_right_link4" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+    }
+
+    over "openarm_right_link5" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_right_link6" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_right_link7" (
+        active = false
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_right_hand" (
+        active = false
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+    }
+
+    over "openarm_right_ee_tcp" (
+        prepend apiSchemas = ["IsaacLinkAPI"]
+    )
+    {
+        string isaac:nameOverride (
+            displayName = "Name Override"
+            doc = "Name override for prim lookup in base name search"
+        )
+        quatd xformOp:orient = (0.0000017881393430999537, -0.9999999999984013, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, -0.128, 0.15)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+    }
+
+    over "joints"
+    {
+        over "openarm_left_joint1" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float drive:angular:physics:targetPosition = 0
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_left_joint2" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_left_joint3" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_left_joint4" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_left_joint5" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float drive:angular:physics:targetPosition = 0
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_left_joint6" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float drive:angular:physics:targetPosition = 0
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_left_joint7" (
+            active = false
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_left_finger_joint1" (
+            active = false
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:linear:physics:position = 0
+            float state:linear:physics:velocity = 0
+        }
+
+        over "openarm_left_finger_joint2" (
+            active = false
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:linear:physics:position = 0
+            float state:linear:physics:velocity = 0
+        }
+
+        over "openarm_left_hand" (
+            active = false
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_left_ee_tcp_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            rel physics:body0 = </openarm/left_hand>
+            point3f physics:localPos0 = (1.0703131e-17, -0.025498034, 0.06189959)
+            quatf physics:localRot0 = (-6.123223e-17, 6.123245e-17, -5.360914e-17, 1)
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_right_joint1" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_right_joint2" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_right_joint3" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_right_joint4" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_right_joint5" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float drive:angular:physics:targetPosition = 0
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_right_joint6" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float drive:angular:physics:targetPosition = 0
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_right_joint7" (
+            active = false
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_right_finger_joint1" (
+            active = false
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:linear:physics:position = 0
+            float state:linear:physics:velocity = 0
+        }
+
+        over "openarm_right_finger_joint2" (
+            active = false
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:linear:physics:position = 0
+            float state:linear:physics:velocity = 0
+        }
+
+        over "openarm_right_hand" (
+            active = false
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+
+        over "openarm_right_ee_tcp_joint" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+            rel physics:body0 = </openarm/right_hand>
+            point3f physics:localPos0 = (0, -0.025498034, 0.06189959)
+            quatf physics:localRot0 = (6.123223e-17, -6.1232455e-17, 1, 5.932661e-17)
+            float state:angular:physics:position = 0
+            float state:angular:physics:velocity = 0
+        }
+    }
+
+    over "root_joint" (
+        prepend apiSchemas = ["IsaacJointAPI"]
+    )
+    {
+        bool physxArticulation:articulationEnabled = 1
+    }
+
+    over "Looks"
+    {
+        over "mat_3_001"
+        {
+            over "mat_3_001"
+            {
+                color3f inputs:diffuse_color_constant = (1, 0.99999, 0.99999)
+                color3f inputs:diffuse_tint = (1, 0.99999, 0.99999)
+            }
+        }
+
+        over "mat_3_002"
+        {
+            over "mat_3_002"
+            {
+                color3f inputs:diffuse_color_constant = (1, 0.99999, 0.99999)
+                color3f inputs:diffuse_tint = (0.000001, 9.9999e-7, 9.9999e-7)
+            }
+        }
+
+        over "mat_1_009"
+        {
+            over "mat_1_009"
+            {
+                color3f inputs:diffuse_color_constant = (1, 0.99999, 0.99999)
+            }
+        }
+
+        over "mat_5"
+        {
+            over "mat_5"
+            {
+                color3f inputs:diffuse_color_constant = (0.56078, 0.55294, 0.54118)
+            }
+        }
+
+        over "mat_0_009"
+        {
+            over "mat_0_009"
+            {
+                color3f inputs:diffuse_color_constant = (1, 0.99999, 0.99999)
+            }
+        }
+
+        def Material "OmniPBR"
+        {
+            token outputs:mdl:displacement.connect = </openarm/Looks/OmniPBR/Shader.outputs:out>
+            token outputs:mdl:surface.connect = </openarm/Looks/OmniPBR/Shader.outputs:out>
+            token outputs:mdl:volume.connect = </openarm/Looks/OmniPBR/Shader.outputs:out>
+
+            def Shader "Shader"
+            {
+                uniform token info:implementationSource = "sourceAsset"
+                uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
+                color3f inputs:diffuse_color_constant = (1, 0.99999, 0.99999)
+                color3f inputs:diffuse_tint = (0.000001, 9.9999e-7, 9.9999e-7)
+                token outputs:out (
+                    renderType = "material"
+                )
+            }
+        }
+    }
+
+    def Xform "left_hand" (
+        references = @../../../../aero-hand-open/ros2/src/aero_hand_open_description/urdf/aero_hand_open_left/aero_hand_open_left.usd@
+    )
+    {
+        string isaac:namespace (
+            displayName = "Namespace"
+            doc = "Namespace of the prim in Isaac Sim"
+        )
+        quatd xformOp:orient = (6.123233995736766e-17, -6.123233995726977e-17, 0.9999999999984013, -0.0000017881393431995334)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0.15349826216697693, 0.2118995070454261)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        over "left_base_link" (
+            delete apiSchemas = ["PhysicsArticulationRootAPI", "PhysxArticulationAPI"]
+        )
+        {
+            string isaac:nameOverride (
+                displayName = "Name Override"
+                doc = "Name override for prim lookup in base name search"
+            )
+            vector3f physics:angularVelocity = (-0.042047836, 0.015682548, 0.85777026)
+            vector3f physics:velocity = (-0.0001955039, -0.000026460519, -0.0000027780402)
+            quatd xformOp:orient = (0.9999986574931125, -0.00006987526966835215, -0.000041336365234465026, 0.0016365881352275783)
+            double3 xformOp:translate = (-0.00003996328450739384, -0.0000013709068724665485, -1.1916345965534703e-8)
+
+            def PhysicsFixedJoint "FixedJoint"
+            {
+                rel physics:body0 = </openarm/openarm_left_link6>
+                rel physics:body1 = </openarm/left_hand/left_base_link>
+                float physics:breakForce = 3.4028235e38
+                float physics:breakTorque = 3.4028235e38
+                point3f physics:localPos0 = (-0.0375, 0.1534975, 0.26200005)
+                point3f physics:localPos1 = (4.4748307e-17, -0.1534975, 0.21190004)
+                quatf physics:localRot0 = (-0.0000017881393, 1, 0, 0)
+                quatf physics:localRot1 = (-6.123234e-17, -6.123234e-17, 1, -0.0000017881393)
+            }
+        }
+
+        over "left_index_proximal_link"
+        {
+            vector3f physics:angularVelocity = (0.56016797, -0.007286683, 0.8893982)
+            vector3f physics:velocity = (-0.00010082593, 0.0005748502, -0.000031651318)
+            quatd xformOp:orient = (0.9994741220109346, 0.00043005585709819286, -0.02621231449696159, 0.01908426187054837)
+            double3 xformOp:translate = (-0.030670672655105577, -0.0012650892104585643, 0.1054176167196809)
+        }
+
+        over "left_index_middle_link"
+        {
+            vector3f physics:angularVelocity = (1.9172087, -0.059452802, 0.96067476)
+            vector3f physics:velocity = (-0.000097300726, 0.0011282793, -0.0000342928)
+            quatd xformOp:orient = (0.9994741216440586, 0.0004306184272888842, -0.026212310817256657, 0.019084273452956133)
+            double3 xformOp:translate = (-0.03286748751997946, -0.0027994125173637086, 0.14835872310252807)
+        }
+
+        over "left_index_distal_link"
+        {
+            vector3f physics:angularVelocity = (1.9172521, -0.058598556, 0.96066207)
+            vector3f physics:velocity = (-0.00006116144, 0.0018484315, -0.00006188385)
+            quatd xformOp:orient = (0.9994741215969281, 0.0004306147019782604, -0.026212312676192426, 0.019084273452060815)
+            double3 xformOp:translate = (-0.034019861370325075, -0.00284035684413958, 0.17032848494853498)
+        }
+
+        over "left_index_tip_link"
+        {
+            vector3f physics:angularVelocity = (1.9172521, -0.058598556, 0.96066207)
+            vector3f physics:velocity = (-0.000015207355, 0.0020721178, -0.00013972406)
+            quatd xformOp:orient = (0.9994741232700506, 0.00043061467691237024, -0.026212257822659967, 0.01908426116993154)
+            double3 xformOp:translate = (-0.03555646166205404, 0.0006192519683378972, 0.19706718607161403)
+        }
+
+        over "left_middle_proximal_link"
+        {
+            vector3f physics:angularVelocity = (0.54715914, 0.01375884, 0.8578163)
+            vector3f physics:velocity = (-0.00012866835, 0.00020999245, -0.000025459838)
+            quatd xformOp:orient = (0.9999986574250382, -0.0000708177640215836, -0.000041327812220468636, 0.0016365894345402696)
+            double3 xformOp:translate = (-0.0075487131252884735, -0.000011124613159496644, 0.10599936846932677)
+        }
+
+        over "left_middle_middle_link"
+        {
+            vector3f physics:angularVelocity = (2.2611144, 0.008161123, 0.85795)
+            vector3f physics:velocity = (-0.00014541681, 0.00078390207, -0.000029896624)
+            quatd xformOp:orient = (0.9999986571948338, -0.00007400660809931887, -0.000041333018026903984, 0.001636588871034873)
+            double3 xformOp:translate = (-0.007547513581812363, -0.0014604365841033307, 0.14899957255344487)
+        }
+
+        over "left_middle_distal_link"
+        {
+            vector3f physics:angularVelocity = (2.2435255, 0.008218829, 0.8579484)
+            vector3f physics:velocity = (-0.0001361247, 0.0016107598, -0.0000619746)
+            quatd xformOp:orient = (0.9999986571965476, -0.0000739842649644696, -0.00004133305099904515, 0.0016365888332668152)
+            double3 xformOp:translate = (-0.0075493375770747445, -0.0014571839586117463, 0.17099957987332456)
+        }
+
+        over "left_middle_tip_link"
+        {
+            vector3f physics:angularVelocity = (2.2435255, 0.008218829, 0.8579484)
+            vector3f physics:velocity = (-0.00010212516, 0.0018675692, -0.00015335766)
+            quatd xformOp:orient = (0.9999986571721291, -0.00007399916181911759, -0.00004138472106492599, 0.0016366017742634347)
+            double3 xformOp:translate = (-0.007563052698969817, 0.0020587662758474734, 0.19777505313544735)
+        }
+
+        over "left_pinky_proximal_link"
+        {
+            vector3f physics:angularVelocity = (0.50732195, 0.05237644, 0.79994774)
+            vector3f physics:velocity = (-0.00008610066, -0.0005050224, -0.00000812353)
+            quatd xformOp:orient = (0.9980769763633256, 0.0016721595904356993, 0.052263438471677436, -0.033287927764625115)
+            double3 xformOp:translate = (0.03823008388280869, -0.00350479520565794, 0.09239665480209949)
+        }
+
+        over "left_pinky_middle_link"
+        {
+            vector3f physics:angularVelocity = (2.0384588, 0.15464532, 0.6387908)
+            vector3f physics:velocity = (-0.00013841025, -0.00003028678, -0.000010787215)
+            quatd xformOp:orient = (0.9980769943442911, 0.001661311575069927, 0.05226379893864858, -0.033287365846774115)
+            double3 xformOp:translate = (0.04261434823274614, -0.0052501046835084775, 0.13516171217056616)
+        }
+
+        over "left_pinky_distal_link"
+        {
+            vector3f physics:angularVelocity = (2.0260706, 0.15381828, 0.64009506)
+            vector3f physics:velocity = (-0.0001839064, 0.0006877205, -0.00003917933)
+            quatd xformOp:orient = (0.998076993467631, 0.001661289420504464, 0.05226381387074403, -0.03328736979336134)
+            double3 xformOp:translate = (0.044907100498676314, -0.005399604291709853, 0.15704140061066993)
+        }
+
+        over "left_pinky_tip_link"
+        {
+            vector3f physics:angularVelocity = (2.0260706, 0.15381828, 0.64009506)
+            vector3f physics:velocity = (-0.00017489822, 0.0009125688, -0.000121740406)
+            quatd xformOp:orient = (0.9980769924749243, 0.0016612893195341808, 0.05226383411875077, -0.03328736777239036)
+            double3 xformOp:translate = (0.047931555658578893, -0.0020773845777615763, 0.18367040080770347)
+        }
+
+        over "left_ring_proximal_link"
+        {
+            vector3f physics:angularVelocity = (0.4704219, 0.031906784, 0.83094186)
+            vector3f physics:velocity = (-0.00011873459, -0.00017493028, -0.00001477972)
+            quatd xformOp:orient = (0.9995333930891749, 0.0003422805198003294, 0.02613123578843434, -0.015812572841129306)
+            double3 xformOp:translate = (0.01558107137680055, -0.0011137083001955261, 0.10542144577672741)
+        }
+
+        over "left_ring_middle_link"
+        {
+            vector3f physics:angularVelocity = (2.032207, 0.08134935, 0.74918044)
+            vector3f physics:velocity = (-0.0001536257, 0.00030683985, -0.00001865179)
+            quatd xformOp:orient = (0.9995333958792209, 0.000333488875291297, 0.026131381340427032, -0.015812343803623882)
+            double3 xformOp:translate = (0.017780810594558737, -0.002633339060884643, 0.14836290973489857)
+        }
+
+        over "left_ring_distal_link"
+        {
+            vector3f physics:angularVelocity = (1.9958338, 0.080198996, 0.7510844)
+            vector3f physics:velocity = (-0.00017202558, 0.001032125, -0.00004678448)
+            quatd xformOp:orient = (0.9995333961684238, 0.0003334739142468088, 0.026131371051110183, -0.015812342842045208)
+            double3 xformOp:translate = (0.01892982237040999, -0.002666192056452882, 0.17033286154177385)
+        }
+
+        over "left_ring_tip_link"
+        {
+            vector3f physics:angularVelocity = (1.9958338, 0.080198996, 0.7510844)
+            vector3f physics:velocity = (-0.00015047437, 0.0012568722, -0.00012806366)
+            quatd xformOp:orient = (0.9995333977911844, 0.00033350371711005555, 0.02613130971121315, -0.015812341004961174)
+            double3 xformOp:translate = (0.02043934911489489, 0.0008040710868543743, 0.19707172374555548)
+        }
+
+        over "left_t_link"
+        {
+            vector3f physics:angularVelocity = (1.8293016, 0.010423526, 6.0000343)
+            vector3f physics:velocity = (-0.000012371154, 0.0013130076, 0.000029428007)
+            quatd xformOp:orient = (0.5784498319392674, -0.4051020922387929, -0.40608688598489356, 0.5799840754919723)
+            double3 xformOp:translate = (-0.028106452897191044, -0.014589770331371932, 0.025362695776437294)
+        }
+
+        over "left_thumb_mcp_link"
+        {
+            vector3f physics:angularVelocity = (8.872018, -26.40635, 10.944054)
+            vector3f physics:velocity = (0.0022984513, 0.006053493, 0.0064317645)
+            quatd xformOp:orient = (0.7116971349630731, -0.3457125018542676, -0.36405492593553157, 0.49135940517007604)
+            double3 xformOp:translate = (-0.047888509929180145, -0.01116539774289968, 0.02850571095475901)
+        }
+
+        over "left_thumb_proximal_link"
+        {
+            vector3f physics:angularVelocity = (16.571854, -55.288013, 16.349375)
+            vector3f physics:velocity = (0.009490311, 0.015505285, 0.026912127)
+            quatd xformOp:orient = (0.7115503755343182, -0.34601436253673, -0.36426336447372304, 0.4912049727940006)
+            double3 xformOp:translate = (-0.08015779405832289, -0.005409666628343024, 0.04340814796562731)
+        }
+
+        over "left_thumb_distal_link"
+        {
+            vector3f physics:angularVelocity = (16.591303, -55.360954, 16.363024)
+            vector3f physics:velocity = (0.021504244, 0.02645163, 0.05175205)
+            quatd xformOp:orient = (0.7115504183597928, -0.3460143245750723, -0.3642633324983585, 0.4912049612107463)
+            double3 xformOp:translate = (-0.10682357847690581, -0.0007706057517346543, 0.05634753979665194)
+        }
+
+        over "left_thumb_tip_link"
+        {
+            vector3f physics:angularVelocity = (16.591303, -55.360954, 16.363024)
+            vector3f physics:velocity = (0.027466947, 0.029736001, 0.05681683)
+            quatd xformOp:orient = (0.711550359945781, -0.3460143251539506, -0.3642633645695171, 0.4912050216373817)
+            double3 xformOp:translate = (-0.13679583370685577, 0.005164684230787114, 0.06704851926092953)
+        }
+
+        over "joints"
+        {
+            over "left_index_mcp_flex"
+            {
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+                float state:angular:physics:position = 0.00010895278
+                float state:angular:physics:velocity = -0.6034804
+            }
+
+            over "left_middle_mcp_flex"
+            {
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+                float state:angular:physics:position = -0.000111679874
+                float state:angular:physics:velocity = -0.5892087
+            }
+
+            over "left_pinky_mcp_flex"
+            {
+                float drive:angular:physics:targetPosition = 0
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+                float state:angular:physics:position = -0.00046859146
+                float state:angular:physics:velocity = -0.55361974
+            }
+
+            over "left_ring_mcp_flex"
+            {
+                float state:angular:physics:position = -0.00031947417
+                float state:angular:physics:velocity = -0.51341873
+            }
+
+            over "left_thumb_cmc_abd"
+            {
+                float state:angular:physics:position = 0.0060614697
+                float state:angular:physics:velocity = -5.4721904
+            }
+
+            over "left_index_pip"
+            {
+                float drive:angular:physics:targetPosition = 0
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+                float state:angular:physics:position = 0.00007577071
+                float state:angular:physics:velocity = -1.3598969
+            }
+
+            over "left_middle_pip"
+            {
+                float drive:angular:physics:targetPosition = 0
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+                float state:angular:physics:position = -0.0003674001
+                float state:angular:physics:velocity = -1.7139581
+            }
+
+            over "left_pinky_pip"
+            {
+                float state:angular:physics:position = -0.0012471736
+                float state:angular:physics:velocity = -1.5430113
+            }
+
+            over "left_ring_pip"
+            {
+                float state:angular:physics:position = -0.0010136507
+                float state:angular:physics:velocity = -1.5646906
+            }
+
+            over "left_thumb_cmc_flex"
+            {
+                float state:angular:physics:position = -0.035151992
+                float state:angular:physics:velocity = -27.782879
+            }
+
+            over "left_index_dip"
+            {
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+                float state:angular:physics:position = -9.881954e-8
+                float state:angular:physics:velocity = -0.0000157949
+            }
+
+            over "left_middle_dip"
+            {
+                float state:angular:physics:position = -0.000008265051
+                float state:angular:physics:velocity = 0.017569175
+            }
+
+            over "left_pinky_dip"
+            {
+                float state:angular:physics:position = -0.00001012321
+                float state:angular:physics:velocity = 0.012491408
+            }
+
+            over "left_ring_dip"
+            {
+                float state:angular:physics:position = -0.000005872485
+                float state:angular:physics:velocity = 0.036433462
+            }
+
+            over "left_thumb_mcp"
+            {
+                float state:angular:physics:position = -0.048607912
+                float state:angular:physics:velocity = -30.37518
+            }
+
+            over "left_thumb_ip"
+            {
+                float state:angular:physics:position = -0.0000016731045
+                float state:angular:physics:velocity = -0.07672681
+            }
+
+            over "left_middle_tip"
+            {
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+            }
+
+            over "left_index_tip"
+            {
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+            }
+        }
+    }
+
+    def Xform "right_hand" (
+        references = @../../../../aero-hand-open/ros2/src/aero_hand_open_description/urdf/aero_hand_open_right/aero_hand_open_right.usd@
+    )
+    {
+        string isaac:namespace (
+            displayName = "Namespace"
+            doc = "Namespace of the prim in Isaac Sim"
+        )
+        quatd xformOp:orient = (-0.0000017881393431995334, 0.9999999999984013, 0, 0)
+        double3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, -0.15349826216697693, 0.2118995070454261)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        over "right_index_proximal_link"
+        {
+            string isaac:nameOverride (
+                displayName = "Name Override"
+                doc = "Name override for prim lookup in base name search"
+            )
+        }
+
+        over "right_base_link"
+        {
+            string isaac:nameOverride (
+                displayName = "Name Override"
+                doc = "Name override for prim lookup in base name search"
+            )
+
+            def PhysicsFixedJoint "FixedJoint"
+            {
+                rel physics:body0 = </openarm/openarm_right_link6>
+                rel physics:body1 = </openarm/right_hand/right_base_link>
+                float physics:breakForce = 3.4028235e38
+                float physics:breakTorque = 3.4028235e38
+                point3f physics:localPos0 = (-0.0375, -0.1534975, 0.26200005)
+                point3f physics:localPos1 = (0, -0.1534975, 0.21190004)
+                quatf physics:localRot0 = (0.0000017881393, 1, 0, 0)
+                quatf physics:localRot1 = (0.0000017881393, 1, 0, 0)
+            }
+        }
+
+        over "right_index_middle_link"
+        {
+            string isaac:nameOverride (
+                displayName = "Name Override"
+                doc = "Name override for prim lookup in base name search"
+            )
+        }
+
+        over "joints"
+        {
+            over "right_index_mcp_flex"
+            {
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_middle_mcp_flex"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_pinky_mcp_flex"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_ring_mcp_flex"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_thumb_cmc_abd"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_index_pip"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_middle_pip"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_pinky_pip"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_ring_pip"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_thumb_cmc_flex"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_index_dip"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_middle_dip"
+            {
+                float drive:angular:physics:targetPosition = 0
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_pinky_dip"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_ring_dip"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_thumb_mcp"
+            {
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_thumb_ip"
+            {
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+                float state:angular:physics:position = 0
+                float state:angular:physics:velocity = 0
+            }
+
+            over "right_thumb_tip"
+            {
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+            }
+
+            over "right_middle_tip"
+            {
+                string isaac:nameOverride (
+                    displayName = "Name Override"
+                    doc = "Name override for prim lookup in base name search"
+                )
+            }
+        }
+
+        over "right_index_distal_link"
+        {
+        }
+
+        over "right_index_tip_link"
+        {
+        }
+
+        over "right_middle_proximal_link"
+        {
+        }
+
+        over "right_middle_middle_link"
+        {
+        }
+
+        over "right_middle_distal_link"
+        {
+        }
+
+        over "right_middle_tip_link"
+        {
+        }
+
+        over "right_pinky_proximal_link"
+        {
+        }
+
+        over "right_pinky_middle_link"
+        {
+        }
+
+        over "right_pinky_distal_link"
+        {
+        }
+
+        over "right_pinky_tip_link"
+        {
+        }
+
+        over "right_ring_proximal_link"
+        {
+        }
+
+        over "right_ring_middle_link"
+        {
+        }
+
+        over "right_ring_distal_link"
+        {
+        }
+
+        over "right_ring_tip_link"
+        {
+        }
+
+        over "right_t_link"
+        {
+        }
+
+        over "right_thumb_mcp_link"
+        {
+        }
+
+        over "right_thumb_proximal_link"
+        {
+        }
+
+        over "right_thumb_distal_link"
+        {
+        }
+
+        over "right_thumb_tip_link"
+        {
+            string isaac:nameOverride (
+                displayName = "Name Override"
+                doc = "Name override for prim lookup in base name search"
+            )
+        }
+
+        over "root_joint" (
+            active = false
+            delete apiSchemas = ["PhysicsArticulationRootAPI", "PhysxArticulationAPI"]
+        )
+        {
+        }
+    }
+    variantSet "Physics" = {
+        "None" (
+            prepend references = @configuration/openarm_bimanual_base.usd@
+        ) {
+            over "joints" (
+                active = false
+            )
+            {
+            }
+
+        }
+        "PhysX" (
+            prepend payload = @configuration/openarm_bimanual_physics.usd@
+        ) {
+
+        }
+    }
+    variantSet "Sensor" = {
+        "None" {
+
+        }
+        "Sensors" (
+            prepend payload = @configuration/openarm_bimanual_sensor.usd@
+        ) {
+
+        }
+    }
+}
+
+def "Render" (
+    hide_in_stage_window = true
+    no_delete = true
+)
+{
+    def "OmniverseKit"
+    {
+        def "HydraTextures" (
+            hide_in_stage_window = true
+            no_delete = true
+        )
+        {
+            def RenderProduct "omni_kit_widget_viewport_ViewportTexture_0" (
+                prepend apiSchemas = ["OmniRtxSettingsCommonAdvancedAPI_1", "OmniRtxSettingsRtAdvancedAPI_1", "OmniRtxSettingsPtAdvancedAPI_1", "OmniRtxPostColorGradingAPI_1", "OmniRtxPostChromaticAberrationAPI_1", "OmniRtxPostBloomPhysicalAPI_1", "OmniRtxPostMatteObjectAPI_1", "OmniRtxPostCompositingAPI_1", "OmniRtxPostDofAPI_1", "OmniRtxPostMotionBlurAPI_1", "OmniRtxPostTvNoiseAPI_1", "OmniRtxPostTonemapIrayReinhardAPI_1", "OmniRtxPostDebugSettingsAPI_1", "OmniRtxDebugSettingsAPI_1"]
+                hide_in_stage_window = true
+                no_delete = true
+            )
+            {
+                rel camera = </OmniverseKit_Persp>
+                token omni:rtx:background:source:texture:textureMode = "repeatMirrored"
+                token omni:rtx:background:source:type = "domeLight"
+                bool omni:rtx:dlss:frameGeneration = 0
+                bool omni:rtx:material:db:nonVisualMaterialCSV:enabled = 0
+                bool omni:rtx:material:db:syncLoads = 1
+                token omni:rtx:post:dlss:execMode = "performance"
+                bool omni:rtx:post:registeredCompositing:invertColorCorrection = 1
+                bool omni:rtx:post:registeredCompositing:invertToneMap = 1
+                bool omni:rtx:pt:lightcache:cached:dontResolveConflicts = 1
+                int omni:rtx:pt:maxSamplesPerLaunch = 2073600
+                int omni:rtx:pt:mgpu:maxPixelsPerRegionExponent = 12
+                color3f omni:rtx:rt:ambientLight:color = (0.1, 0.1, 0.1)
+                bool omni:rtx:rt:demoire = 0
+                bool omni:rtx:rt:ecoMode:enabled
+                bool omni:rtx:rt:lightcache:spatialCache:dontResolveConflicts = 1
+                bool omni:rtx:scene:hydra:materialSyncLoads = 1
+                bool omni:rtx:scene:hydra:mdlMaterialWarmup = 1
+                bool omni:rtx:scene:useViewLightingMode
+                uint omni:rtx:viewTile:limit = 4294967295
+                rel orderedVars = </Render/Vars/LdrColor>
+                custom bool overrideClipRange = 0
+                uniform int2 resolution = (1280, 720)
+            }
+        }
+    }
+
+    def RenderSettings "OmniverseGlobalRenderSettings" (
+        prepend apiSchemas = ["OmniRtxSettingsGlobalRtAdvancedAPI_1", "OmniRtxSettingsGlobalPtAdvancedAPI_1"]
+        no_delete = true
+    )
+    {
+        rel products = </Render/OmniverseKit/HydraTextures/omni_kit_widget_viewport_ViewportTexture_0>
+    }
+
+    def "Vars"
+    {
+        def RenderVar "LdrColor" (
+            hide_in_stage_window = true
+            no_delete = true
+        )
+        {
+            uniform string sourceName = "LdrColor"
+        }
+    }
+}
+
+def PhysicsScene "physicsScene" (
+    prepend apiSchemas = ["PhysxSceneAPI"]
+)
+{
+}
+

@@ -1,0 +1,1211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="HUMAN-ASSY_URFD_ver.3">
+  <link
+    name="BASE_link">
+    <inertial>
+      <origin
+        xyz="-0.0111313542143779 0.000409095836428897 0.0829766913878993"
+        rpy="0 0 0" />
+      <mass
+        value="2.4264581549556" />
+      <inertia
+        ixx="0.00751012663604818"
+        ixy="-1.55689816579725E-05"
+        ixz="0.000225094060353391"
+        iyy="0.00707590191197592"
+        iyz="6.28847223157289E-05"
+        izz="0.00683414727483654" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/BASE_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/BASE_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="LEG_C_Link">
+    <inertial>
+      <origin
+        xyz="0.012529 -0.015169 0.098917"
+        rpy="0 0 0" />
+      <mass
+        value="1.3906" />
+      <inertia
+        ixx="0.0052028"
+        ixy="0.00020228"
+        ixz="-0.00052692"
+        iyy="0.0051586"
+        iyz="0.00017701"
+        izz="0.0030384" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/LEG_C_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/LEG_C_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_1_LEG_C"
+    type="revolute">
+    <origin
+      xyz="0.000500001118696994 3.94863260000378E-05 0.088267949192"
+      rpy="0 0 0" />
+    <parent
+      link="BASE_link" />
+    <child
+      link="LEG_C_Link" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="0"
+      upper="0.523"
+      effort="50"
+      velocity="5" />
+  </joint>
+  <link
+    name="LEG_A_Link">
+    <inertial>
+      <origin
+        xyz="-0.00322404827079422 5.72102191875867E-05 -0.19504996410188"
+        rpy="0 0 0" />
+      <mass
+        value="1.16238536563379" />
+      <inertia
+        ixx="0.00752379849628237"
+        ixy="8.01454162281565E-07"
+        ixz="0.000327221691680512"
+        iyy="0.00769712572878199"
+        iyz="-2.12122291939544E-06"
+        izz="0.00254590827872452" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/LEG_A_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/LEG_A_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_2_LEG_A"
+    type="prismatic">
+    <origin
+      xyz="-0.00069299 -0.019882 0.75448"
+      rpy="0 0 0" />
+    <parent
+      link="LEG_C_Link" />
+    <child
+      link="LEG_A_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.24"
+      upper="0"
+      effort="40"
+      velocity="2" />
+      </joint>
+  <link
+    name="BODY_A1_1_Link">
+    <inertial>
+      <origin
+        xyz="-0.00222489530365861 0.0122245599822286 -0.00451054982894994"
+        rpy="0 0 0" />
+      <mass
+        value="2.32685853908437" />
+      <inertia
+        ixx="0.00491810815909088"
+        ixy="9.05344034090241E-06"
+        ixz="-3.86564101589557E-07"
+        iyy="0.00703468514789518"
+        iyz="-3.33027603174717E-06"
+        izz="0.00528060631506608" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/BODY_A1_1_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.592156862745098 0.666666666666667 0.682352941176471 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/BODY_A1_1_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_3_BODY_A1_1"
+    type="revolute">
+    <origin
+      xyz="-2.16185809188091E-05 0 -0.00480238878585015"
+      rpy="0 0 0" />
+    <parent
+      link="LEG_A_Link" />
+    <child
+      link="BODY_A1_1_Link" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-3.14"
+      upper="3.14"
+      effort="40"
+      velocity="16" />
+  </joint>
+  <link
+    name="HAED_B_Link">
+    <inertial>
+      <origin
+        xyz="0.0217375835841759 0.00724192417704433 0.053095883548357"
+        rpy="0 0 0" />
+      <mass
+        value="0.0760457241164291" />
+      <inertia
+        ixx="2.6724587385221E-05"
+        ixy="-4.16128827745498E-07"
+        ixz="-2.73345325421118E-06"
+        iyy="2.56133200484202E-05"
+        iyz="-4.10513964043728E-06"
+        izz="1.90953800245187E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/HAED_B_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/HAED_B_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_4_HAED_B"
+    type="revolute">
+    <origin
+      xyz="2.16179450283669E-05 0.00171381616556782 0.0607535887629951"
+      rpy="0 0 0" />
+    <parent
+      link="BODY_A1_1_Link" />
+    <child
+      link="HAED_B_Link" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-3.14"
+      upper="3.14"
+      effort="10"
+      velocity="16" />
+  </joint>
+  <link
+    name="HAED_As_Link">
+    <inertial>
+      <origin
+        xyz="-0.0241322703258799 0.0130056700694588 0.0450252303208141"
+        rpy="0 0 0" />
+      <mass
+        value="0.451420785654223" />
+      <inertia
+        ixx="0.000796355294915092"
+        ixy="2.29550397973488E-05"
+        ixz="-1.75311084548572E-05"
+        iyy="0.00126880058998824"
+        iyz="1.09228550380716E-05"
+        izz="0.000959468437540349" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/HAED_As_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/HAED_As_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_5_HAED_As"
+    type="revolute">
+    <origin
+      xyz="0.0247999913495787 0.000204577058025346 0.0770301529318649"
+      rpy="0 0 0" />
+    <parent
+      link="HAED_B_Link" />
+    <child
+      link="HAED_As_Link" />
+    <axis
+      xyz="-1 0 0" />
+    <limit
+      lower="-0.523"
+      upper="0.523"
+      effort="10"
+      velocity="16" />
+  </joint>
+  <link
+    name="ARM_LEFT_A_Link">
+    <inertial>
+      <origin
+        xyz="0.0547043437922452 0.000266003521787211 3.56629471294223E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.431302266621769" />
+      <inertia
+        ixx="0.000334299654145244"
+        ixy="5.19061415421028E-07"
+        ixz="-1.11488791288463E-08"
+        iyy="0.000445404068078631"
+        iyz="-1.13958890300355E-09"
+        izz="0.000314518993761918" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_A_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_A_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_6_ARM_LEFT_A"
+    type="revolute">
+    <origin
+      xyz="0.130521613937763 0.0378945845208191 -0.00399999999971978"
+      rpy="0 0 0" />
+    <parent
+      link="BODY_A1_1_Link" />
+    <child
+      link="ARM_LEFT_A_Link" />
+    <axis
+      xyz="-1 0 0" />
+    <limit
+      lower="-1.49"
+      upper="3.49"
+      effort="40"
+      velocity="16.75" />
+  </joint>
+  <link
+    name="ARM_LEFT_B_Link">
+    <inertial>
+      <origin
+        xyz="-0.000369050666552712 -0.0099784571733538 -0.0396363685860948"
+        rpy="0 0 0" />
+      <mass
+        value="0.113813653883565" />
+      <inertia
+        ixx="9.21749063546581E-05"
+        ixy="1.82464321371983E-08"
+        ixz="-4.81679402763407E-08"
+        iyy="0.000138588140775212"
+        iyz="-9.23844166137569E-06"
+        izz="7.64900245949834E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_B_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_B_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_7_ARM_LEFT_B"
+    type="revolute">
+    <origin
+      xyz="0.06 0.0301 0"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_LEFT_A_Link" />
+    <child
+      link="ARM_LEFT_B_Link" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="-0.17"
+      upper="3.32"
+      effort="40"
+      velocity="16.75" />
+  </joint>
+  <link
+    name="ARM_LEFT_C_Link">
+    <inertial>
+      <origin
+        xyz="0.00506593436639896 -0.0161873145274493 -0.125015023292294"
+        rpy="0 0 0" />
+      <mass
+        value="0.408660316807001" />
+      <inertia
+        ixx="0.000796482212289211"
+        ixy="6.4885673775293E-07"
+        ixz="-5.79547763807043E-06"
+        iyy="0.000753742647874056"
+        iyz="-1.17000494157217E-05"
+        izz="0.000243282739740689" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_C_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_C_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_8_ARM_LEFT_C"
+    type="revolute">
+    <origin
+      xyz="0 -0.0301 -0.0800000000000004"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_LEFT_B_Link" />
+    <child
+      link="ARM_LEFT_C_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="27"
+      velocity="5.445" />
+  </joint>
+  <link
+    name="ARM_LEFT_D_Link">
+    <inertial>
+      <origin
+        xyz="-0.000964346431974489 0.0371382149167537 -0.0652006940023269"
+        rpy="0 0 0" />
+      <mass
+        value="0.263146760897375" />
+      <inertia
+        ixx="0.00040841601737922"
+        ixy="-1.08286901247763E-06"
+        ixz="4.96706745343801E-07"
+        iyy="0.000300044013557352"
+        iyz="5.75459337007845E-05"
+        izz="0.000208460891831576" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_D_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_D_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_9_ARM_LEFT_D"
+    type="revolute">
+    <origin
+      xyz="-5.00000000000222E-05 -0.043503623061 -0.225385906696"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_LEFT_C_Link" />
+    <child
+      link="ARM_LEFT_D_Link" />
+    <axis
+      xyz="-1 0 0" />
+    <limit
+      lower="0"
+      upper="3.14"
+      effort="27"
+      velocity="5.445" />
+  </joint>
+  <link
+    name="ARM_LEFT_E_Link">
+    <inertial>
+      <origin
+        xyz="0.000743900534598052 0.00241855889102893 -0.0494584383978024"
+        rpy="0 0 0" />
+      <mass
+        value="0.253781893760031" />
+      <inertia
+        ixx="0.000230823711971016"
+        ixy="-7.32704975860853E-07"
+        ixz="1.24961442795924E-06"
+        iyy="0.000296649995186885"
+        iyz="-5.70091097288788E-09"
+        izz="0.00015733115182952" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_E_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_E_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_10_ARM_LEFT_E"
+    type="revolute">
+    <origin
+      xyz="0 0.042175289743472 -0.11155048353728"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_LEFT_D_Link" />
+    <child
+      link="ARM_LEFT_E_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="7"
+      velocity="20.94" />
+  </joint>
+  <link
+    name="ARM_LEFT_G_Link">
+    <inertial>
+      <origin
+        xyz="-0.000231718138028775 -0.000304043372009954 8.87389255948001E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.128824324074872" />
+      <inertia
+        ixx="5.12970141114296E-05"
+        ixy="2.79515557644646E-07"
+        ixz="-9.10032009717529E-09"
+        iyy="4.36485321722362E-05"
+        iyz="-6.46903047835283E-14"
+        izz="4.39572934056854E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_G_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_LEFT_G_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint-11_ARM_LEFT_G"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.12049999999972"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_LEFT_E_Link" />
+    <child
+      link="ARM_LEFT_G_Link" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="-0.79"
+      upper="0.79"
+      effort="7"
+      velocity="20.94" />
+  </joint>
+  <link
+    name="HANDLE_LEFT_Link">
+    <inertial>
+      <origin
+        xyz="5.66385479322529E-07 -0.029047906491613 -0.00822726224542061"
+        rpy="0 0 0" />
+      <mass
+        value="0.0355386245148231" />
+      <inertia
+        ixx="8.75796689045232E-06"
+        ixy="-8.86244666305207E-12"
+        ixz="1.39771939467055E-12"
+        iyy="1.08305056698875E-05"
+        iyz="2.51457015605447E-07"
+        izz="8.90791424081594E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/HANDLE_LEFT_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/HANDLE_LEFT_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint-12_HANDLE_LEFT"
+    type="revolute">
+    <origin
+      xyz="0.0205 0 0"
+      rpy="1.5707963267949 0 1.5707963267949" />
+    <parent
+      link="ARM_LEFT_G_Link" />
+    <child
+      link="HANDLE_LEFT_Link" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="7"
+      velocity="20.94" />
+  </joint>
+  <link
+    name="ARM_RIGHT_A_Link">
+    <inertial>
+      <origin
+        xyz="-0.0546895034769377 0.000265760035539825 2.98825897360189E-08"
+        rpy="0 0 0" />
+      <mass
+        value="0.431697581713749" />
+      <inertia
+        ixx="0.000334305869449502"
+        ixy="-5.19055669098767E-07"
+        ixz="-1.11252184169472E-08"
+        iyy="0.000445407303187449"
+        iyz="1.17087058335671E-09"
+        izz="0.000314523705645878" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_A_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_A_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_13_ARM_RIGHT_A"
+    type="revolute">
+    <origin
+      xyz="-0.13048 0.037895 -0.004"
+      rpy="0 0 0" />
+    <parent
+      link="BODY_A1_1_Link" />
+    <child
+      link="ARM_RIGHT_A_Link" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-3.49"
+      upper="1.4"
+      effort="40"
+      velocity="16.75" />
+  </joint>
+  <link
+    name="ARM_RIGHT_B_Link">
+    <inertial>
+      <origin
+        xyz="0.000343828882356761 -0.00997787991390656 -0.0396512706567191"
+        rpy="0 0 0" />
+      <mass
+        value="0.113813771649095" />
+      <inertia
+        ixx="9.21761446501644E-05"
+        ixy="-2.02022578213229E-08"
+        ixz="5.03246606203037E-08"
+        iyy="0.000138590260959994"
+        iyz="-9.23833982281085E-06"
+        izz="7.64909311733243E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_B_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_B_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_14_ARM_RIGHT_B"
+    type="revolute">
+    <origin
+      xyz="-0.06 0.0301 0"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_RIGHT_A_Link" />
+    <child
+      link="ARM_RIGHT_B_Link" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="-3.32"
+      upper="0.17"
+      effort="40"
+      velocity="16.74" />
+  </joint>
+  <link
+    name="ARM_RIGHT_C_Link">
+    <inertial>
+      <origin
+        xyz="0.00527954505527423 -0.016309538195961 -0.125859651068924"
+        rpy="0 0 0" />
+      <mass
+        value="0.411573540602913" />
+      <inertia
+        ixx="0.000801882171644512"
+        ixy="5.16491359859111E-07"
+        ixz="-6.23349199518321E-06"
+        iyy="0.000759339893253033"
+        iyz="-1.2438558772185E-05"
+        izz="0.000244294755806519" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_C_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_C_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_15_ARM_RIGHT_C"
+    type="revolute">
+    <origin
+      xyz="0 -0.0301 -0.07981"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_RIGHT_B_Link" />
+    <child
+      link="ARM_RIGHT_C_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="27"
+      velocity="5.445" />
+  </joint>
+  <link
+    name="ARM_RIGHT_D_Link">
+    <inertial>
+      <origin
+        xyz="-0.000378043978999154 0.0373674407720196 -0.065600352931081"
+        rpy="0 0 0" />
+      <mass
+        value="0.261536181617175" />
+      <inertia
+        ixx="0.000408221885535078"
+        ixy="-5.21075748821083E-07"
+        ixz="-6.90997180663633E-08"
+        iyy="0.000299945690667166"
+        iyz="5.75416534919999E-05"
+        izz="0.000208361226783661" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_D_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_D_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_16_ARM_RIGHT-D"
+    type="revolute">
+    <origin
+      xyz="0 -0.043503638701146 -0.225635906695"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_RIGHT_C_Link" />
+    <child
+      link="ARM_RIGHT_D_Link" />
+    <axis
+      xyz="-1 0 0" />
+    <limit
+      lower="0"
+      upper="3.14"
+      effort="27"
+      velocity="5.445" />
+  </joint>
+  <link
+    name="ARM_RIGHT_E_Link">
+    <inertial>
+      <origin
+        xyz="-0.000760954798151386 0.00240871708596832 -0.0492182261894678"
+        rpy="0 0 0" />
+      <mass
+        value="0.25314715088768" />
+      <inertia
+        ixx="0.00023080567742516"
+        ixy="7.33126235410851E-07"
+        ixz="-1.25146521463435E-06"
+        iyy="0.000296613700433211"
+        iyz="-5.90384532350324E-09"
+        izz="0.000157312668447223" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_E_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_E_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_17_ARM_RIGHT_E"
+    type="revolute">
+    <origin
+      xyz="0 0.042175 -0.11155"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_RIGHT_D_Link" />
+    <child
+      link="ARM_RIGHT_E_Link" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="7"
+      velocity="20.94" />
+  </joint>
+  <link
+    name="ARM_RIGHT_G_Link">
+    <inertial>
+      <origin
+        xyz="0.00023020864649495 -0.000528804621145129 8.8160796540615E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.129669097696943" />
+      <inertia
+        ixx="5.13160043236543E-05"
+        ixy="2.91731989634983E-07"
+        ixz="9.10032378191938E-09"
+        iyy="4.36841295695887E-05"
+        iyz="7.25788188893751E-14"
+        izz="4.39762836145648E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_G_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/ARM_RIGHT_G_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_18_ARM_RIGHT_G"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.1205"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_RIGHT_E_Link" />
+    <child
+      link="ARM_RIGHT_G_Link" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.79"
+      upper="0.79"
+      effort="7"
+      velocity="20.94" />
+  </joint>
+  <link
+    name="HANDLE_RIGTH_Link">
+    <inertial>
+      <origin
+        xyz="0.00822726224529829 -5.97667160956439E-07 -0.0290479064919108"
+        rpy="0 0 0" />
+      <mass
+        value="0.0355386245148589" />
+      <inertia
+        ixx="8.90791424105756E-06"
+        ixy="1.39771932393519E-12"
+        ixz="-2.51457015610631E-07"
+        iyy="8.75796689067074E-06"
+        iyz="8.86244979863367E-12"
+        izz="1.08305056698741E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/HANDLE_RIGTH_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/HANDLE_RIGTH_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_19_HANDLE_RIGTH"
+    type="revolute">
+    <origin
+      xyz="-0.0205 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="ARM_RIGHT_G_Link" />
+    <child
+      link="HANDLE_RIGTH_Link" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="7"
+      velocity="20.94" />
+  </joint>
+  <link
+    name="LEG_B_Link">
+    <inertial>
+      <origin
+        xyz="-3.3149E-06 1.4908E-06 -0.10042"
+        rpy="0 0 0" />
+      <mass
+        value="0.37687" />
+      <inertia
+        ixx="0.0018883"
+        ixy="-4.5846E-08"
+        ixz="-9.8649E-08"
+        iyy="0.0018883"
+        iyz="4.4371E-08"
+        izz="0.0012335" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/LEG_B_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HUMAN-ASSY_URFD_ver.3/meshes/LEG_B_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_2_LEG_B"
+    type="prismatic">
+    <origin
+      xyz="0 0 -0.31007"
+      rpy="0 0 0" />
+    <parent
+      link="LEG_A_Link" />
+    <child
+      link="LEG_B_Link" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="0"
+      upper="0.15"
+      effort="40"
+      velocity="2" />
+    <mimic
+      joint="joint_2_LEG_A"
+      multiplier="-0.5"
+      offset="0" />
+  </joint>
+</robot>

@@ -163,7 +163,8 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         ),
         physx=PhysxCfg(
             bounce_threshold_velocity=0.2,
-            gpu_max_rigid_patch_count=4 * 5 * 2**15
+            gpu_max_rigid_patch_count=4 * 5 * 2**15,
+            gpu_collision_stack_size=2**27,  # 128MB, required >102MB by PhysX
         ),
     )
     # robot
