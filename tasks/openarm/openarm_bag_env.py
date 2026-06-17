@@ -26,12 +26,12 @@ from pxr import Gf, UsdGeom, UsdShade, Sdf
 
 import omni.usd
 import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
+from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import TiledCamera
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from isaaclab.utils.math import quat_conjugate, quat_mul, sample_uniform, saturate, quat_from_euler_xyz, euler_xyz_from_quat, quat_from_angle_axis, axis_angle_from_quat
+from isaaclab.utils.math import quat_conjugate, quat_mul, sample_uniform, saturate, quat_from_euler_xyz, euler_xyz_from_quat, quat_from_angle_axis, axis_angle_from_quat, quat_apply
 from isaacsim.core.utils.prims import set_prim_attribute_value
 from isaaclab.controllers import DifferentialIKController, DifferentialIKControllerCfg
 from isaaclab.utils.math import subtract_frame_transforms
@@ -123,6 +123,13 @@ class OpenarmEnv(DirectRLEnv):
         # Wrench tensors
         self.object_applied_force = torch.zeros(self.num_envs, 1, 3, device=self.device)
         self.object_applied_torque = torch.zeros(self.num_envs, 1, 3, device=self.device)
+
+        # Per-object z offset for link2
+        _z_offsets = torch.tensor(
+            [0.4, 0.322, 0.25, 0.29, 0.3, 0.37, 0.32, 0.24, 0.29, 0.35], device=self.device
+        )
+        self.link2_local_offset = torch.zeros(self.num_envs, 3, device=self.device)
+        self.link2_local_offset[:, 2] = _z_offsets[self.multi_object_idx]
 
         # Object noise
         self.object_pos_bias_width = torch.zeros(self.num_envs, 1, device=self.device)
@@ -326,11 +333,11 @@ class OpenarmEnv(DirectRLEnv):
 
         # List all subdirectories in the target directory
         sub_dirs = sorted(os.listdir(objects_full_path))
-
+        
         # Filter out all subdirectories deeper than one level
         sub_dirs = [object_name for object_name in sub_dirs if os.path.isdir(
             os.path.join(objects_full_path, object_name))]
-
+       
         self.num_unique_objects = len(sub_dirs)
 
         # This creates a 1D tensor array of length self.num_envs with values:
@@ -380,15 +387,15 @@ class OpenarmEnv(DirectRLEnv):
 #        # Save object scale across envs
 #        self.object_scale = self.object_scales[self.device_index] *\
 #                torch.ones(self.num_envs, 1, device=self.device)
-
+        
         # If object scaling is deactivated, then just set all the scalings to 1.
         if self.cfg.deactivate_object_scaling:
-            self.object_scale = torch.ones_like(self.object_scale) * 1.
+            self.object_scale = torch.ones_like(self.object_scale) * 1.1
 
         for i in range(self.num_envs):
+            self.multi_object_idx = torch.ones(self.num_envs, device=self.device, dtype=torch.int64)*9
             # TODO: check to see that the below config settings make sense
             object_name = sub_dirs[self.multi_object_idx[i]]
-            object_name="handbag4"
             object_usd_path = objects_full_path + "/" + object_name + "/" + object_name + ".usd"
             print('Object name', object_name)
             print('object usd path', object_usd_path)
@@ -426,7 +433,7 @@ class OpenarmEnv(DirectRLEnv):
                     mass_props=sim_utils.MassPropertiesCfg(density=30.0),
                 ),
                 init_state=RigidObjectCfg.InitialStateCfg(
-                    pos=(-0.5, 0., 0.5),
+                    pos=(0., 0., 0.),
                     rot=(1.0, 0.0, 0.0, 0.0)),
                     #rot=(0.9848, 0.0, 0.0, 0.1736)),
             )
@@ -514,11 +521,11 @@ class OpenarmEnv(DirectRLEnv):
         # Add to scene
         self.object = RigidObject(multi_object_cfg)
         self.scene.rigid_objects["object"] = self.object
-
-        self.grasp_point_view = XformPrimView(
-            prim_path="/World/envs/env_.*/object/.*/baseLink/grasp_point",
-            device=self.device,
-        )
+        
+        # self.grasp_point_view = XformPrimView(
+        #     prim_path="/World/envs/env_.*/object/.*/baseLink/grasp_point",
+        #     device=self.device,
+        # )
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         # Find the current global minimum adr increment
@@ -546,6 +553,7 @@ class OpenarmEnv(DirectRLEnv):
 
         left_target_pose = torch.cat((left_target_pos, left_target_quat), dim=-1).to(dtype=self.left_tcp_pose.dtype)
         #left_target_pose = torch.tensor([0.1, 0.1, 0.2,0.,1.,0.,0.], device=self.device).repeat((self.num_envs, 1))
+        #left_target_pose[:,:3] = self.grasp_pos[:,:3]
 
         self.diff_ik_controller.set_command(torch.round(left_target_pose, decimals=3))
 
@@ -704,9 +712,9 @@ class OpenarmEnv(DirectRLEnv):
         quat_dot = torch.clamp(torch.abs((tcp_quat * target_quat).sum(dim=-1)), max=1.0)
         angle_error = 2.0 * torch.acos(quat_dot)
         angle_goal = 2. * torch.exp(-10. * angle_error)
-        angle_goal = torch.where((self.object_pos[:,2]>0.02)&(self.left_gripper_action<=0.5), angle_goal, 0.)
+        angle_goal = torch.where((self.object_pos[:,2]>0.03)&(self.left_gripper_action<=0.5)&(self.hand_to_object_pos_error<=0.05), angle_goal, 0.)
 
-        total_reward = 0.01 * (hand_to_object_reward + lift_reward + close_gripper_reward + angle_goal).clamp(min=0.)
+        total_reward = 0.01 * (hand_to_object_reward + lift_reward + close_gripper_reward).clamp(min=0.)
         #total_reward = torch.where(self.in_success_region & (self.left_gripper_action<=0.5), total_reward+0.3, total_reward)
         #total_reward = torch.where(self.out_of_joint_limit, 0., total_reward)
 
@@ -727,14 +735,14 @@ class OpenarmEnv(DirectRLEnv):
         # the allowable work volume as set by fabrics
 
         # If Z is too low, then it has probably fallen off
-        object_outside_upper_x = self.object_pos[:,0] > 0.5
-        object_outside_lower_x = self.object_pos[:,0] < 0.
+        object_outside_upper_x = self.grasp_pos[:,0] > 0.5
+        object_outside_lower_x = self.grasp_pos[:,0] < 0.
 
-        object_outside_upper_y = self.object_pos[:,1] > 0.45
-        object_outside_lower_y = self.object_pos[:,1] < -0.05
+        object_outside_upper_y = self.grasp_pos[:,1] > 0.45
+        object_outside_lower_y = self.grasp_pos[:,1] < -0.05
 
         z_height_cutoff = 0.15
-        object_too_low = self.object_pos[:,2] < z_height_cutoff
+        object_too_low = self.grasp_pos[:,2] < z_height_cutoff
         
         # tip_outside_upper_x = self.left_tcp_pose[:,0] > (self.cfg.x_center + self.cfg.x_width / 2.) +0.1
         # tip_outside_lower_x = self.left_tcp_pose[:,0] < 0.
@@ -749,8 +757,8 @@ class OpenarmEnv(DirectRLEnv):
         out_of_reach = object_outside_upper_x | \
                        object_outside_lower_x | \
                        object_outside_upper_y | \
-                       object_outside_lower_y
-                    #   object_too_low 
+                       object_outside_lower_y | \
+                       object_too_low 
                     #    tip_outside_upper_x | \
                     #    tip_outside_lower_x | \
                     #    tip_outside_upper_y | \
@@ -805,7 +813,9 @@ class OpenarmEnv(DirectRLEnv):
         # object_xy[:, 1] += self.cfg.y_center
         # object_start_state[env_ids, :2] = object_xy
 
-        object_start_state[env_ids, 0] = self.cfg.x_center + x_width_spawn * (1.5*torch.rand(num_ids, device=self.device) - 0.5)
+        # object_start_state[env_ids, 0] = self.cfg.x_center + x_width_spawn * (1.5*torch.rand(num_ids, device=self.device) - 0.5)
+        # object_start_state[env_ids, 1] = self.cfg.y_center + y_width_spawn * 2.*(torch.rand(num_ids, device=self.device)-0.5)
+        object_start_state[env_ids, 0] = self.cfg.x_center + x_width_spawn * 2.*(torch.rand(num_ids, device=self.device) - 0.5)
         object_start_state[env_ids, 1] = self.cfg.y_center + y_width_spawn * 2.*(torch.rand(num_ids, device=self.device)-0.5)
         # Keep drop height the same
         object_start_state[env_ids, 2] = 0.01
@@ -1298,11 +1308,14 @@ class OpenarmEnv(DirectRLEnv):
 
         # Data from objects------------------------
         # Object translational position, 3D
-        grasp_pos, grasp_quat = self.grasp_point_view.get_world_poses()
-        self.grasp_pos = grasp_pos - self.scene.env_origins
- 
+        #grasp_pos, grasp_quat = self.grasp_point_view.get_world_poses()
         self.object_pos = self.object.data.root_pos_w - self.scene.env_origins
 
+        offset = self.link2_local_offset * self.object_scale
+        self.grasp_pos = self.object_pos + quat_apply(self.object.data.root_quat_w, offset)
+
+        # print(self.grasp_pos)
+        # print(self.object_pos)
         # NOTE: noise on object pos and rot is per-step sampled uniform noise and sustained
         # bias noise sampled only at start of rollout
         self.object_pos_noisy = self.object_pos +\
@@ -1330,7 +1343,7 @@ class OpenarmEnv(DirectRLEnv):
        
         # Calculate vertical error
         self.object_vertical_error = torch.abs(self.object_goal[:, 2] - self.object_pos[:, 2])
-
+        
         # Calculate whether object is within success region
         self.in_success_region = self.object_vertical_error < self.cfg.object_goal_tol
         # if not in success region, reset time in success region, else increment
@@ -1503,17 +1516,17 @@ def compute_rewards(
     lift_sharpness: float
 ):
     # Reward for moving fingertip and palm points closer to object centroid point
-    hand_to_object_reward = 1. * torch.exp(-15. * hand_to_object_pos_error)
+    hand_to_object_reward = 1. * torch.exp(-10. * hand_to_object_pos_error)
     # Reward for moving the object to the goal translational position
     object_to_goal_reward = 0. * torch.exp(object_to_goal_sharpness * object_to_object_goal_pos_error)
     #object_to_goal_reward = torch.where(object_pos[:,2]>0.245, object_to_goal_reward, 0.)
     
-    close_gripper_reward = 0.7*torch.where(hand_to_object_pos_error<=0.025, torch.clamp(torch.exp(-1. * raw_gipper_action), max=3.), 0.)
-    close_gripper_penalty = 0.5*torch.exp(-10. * hand_to_object_pos_error)*torch.where(((hand_to_object_pos_error>0.025)) & (gripper_action<=0.5), -1., 0.)
+    close_gripper_reward = 0.7*torch.where(hand_to_object_pos_error<=0.05, torch.clamp(torch.exp(-1. * raw_gipper_action), max=3.), 0.)
+    close_gripper_penalty = 0.5*torch.exp(-10. * hand_to_object_pos_error)*torch.where(((hand_to_object_pos_error>0.05)) & (gripper_action<=0.5), -1., 0.)
     
     # Reward for lifting object off table and towards object goal
     lift_reward = 5. * torch.exp(-10. * object_vertical_error)
-    lift_reward = torch.where((object_pos[:,2]>0.02)&(gripper_action<=0.5), lift_reward, 0.)
+    lift_reward = torch.where((object_pos[:,2]>0.02)&(gripper_action<=0.5)&(hand_to_object_pos_error<=0.05), lift_reward, 0.)
   
     return hand_to_object_reward, object_to_goal_reward, close_gripper_reward+close_gripper_penalty, lift_reward
 

@@ -164,7 +164,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
         physx=PhysxCfg(
             bounce_threshold_velocity=0.2,
             gpu_max_rigid_patch_count=4 * 5 * 2**15,
-            #gpu_collision_stack_size=2**27,
+            gpu_collision_stack_size=2**27,
         ),
     )
     # robot
@@ -173,18 +173,18 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
             pos=(0.0, 0.0, 0.0),
             rot=(1.0, 0.0, 0.0, 0.0),
             joint_pos={
-                    "openarm_left_joint1": 1.1,
+                    "openarm_left_joint1": 1.3,
                     "openarm_left_joint2": -0.35,
                     "openarm_left_joint3": -0.24,
-                    "openarm_left_joint4": 2.2,
-                    "openarm_left_joint5": -0.4,
+                    "openarm_left_joint4": 2.3,
+                    "openarm_left_joint5": 1.,
                     "openarm_left_joint6": 0.,
 
-                    "openarm_right_joint1": -1.1,
+                    "openarm_right_joint1": -1.3,
                     "openarm_right_joint2": 0.35,
                     "openarm_right_joint3": 0.24,
-                    "openarm_right_joint4": 2.2,
-                    "openarm_right_joint5": 0.2,
+                    "openarm_right_joint4": 2.3,
+                    "openarm_right_joint5": -1.,
                     "openarm_right_joint6": 0.,
 
                     ".*mcp_flex": 0.,
@@ -451,7 +451,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
 
     # Object spawning params
     x_center = 0.25
-    x_width = 0.2
+    x_width = 0.1
     y_center = 0.2
     y_width = 0.15
 
@@ -515,7 +515,7 @@ class OpenarmEnvCfg(DirectRLEnvCfg):
     # Object scaling
     object_scale_max = 1.1
     object_scale_min = 0.9
-    deactivate_object_scaling = False
+    deactivate_object_scaling = True
 
     aux_coeff = 10.
 
