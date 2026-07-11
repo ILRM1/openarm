@@ -129,9 +129,9 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
     num_actions = 7
     success_timeout = 2.
     distillation = False
-    num_states = 30
-    num_observations = 30
-    num_student_observations = 21
+    num_states = 35
+    num_observations = 35  # button_num one-hot: 1 -> 5 dims (+4)
+    num_student_observations = 25  # button_num one-hot: 1 -> 5 dims (+4)
     num_teacher_observations = num_observations
 
     state_space = 0
@@ -220,7 +220,7 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
                                  "left_ring_mcp_flex", "left_ring_pip", "left_ring_dip",
                                "left_thumb_cmc_abd", "left_thumb_cmc_flex", "left_thumb_mcp", "left_thumb_ip"]
     
-    right_gripper_joint_name = ["right_index_mcp_flex", "right_index_pip", "right_index_dip", 
+    right_gripper_joint_name = [#"right_index_mcp_flex", "right_index_pip", "right_index_dip", 
                                 "right_middle_mcp_flex", "right_middle_pip", "right_middle_dip", 
                                 "right_pinky_mcp_flex", "right_pinky_pip", "right_pinky_dip",
                                 "right_ring_mcp_flex", "right_ring_pip", "right_ring_dip",
@@ -299,8 +299,8 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
             rot=(1.0, 0.0, 0.0, 0.0)), 
     )
     # distillation related parameters
-    img_width = 120  
-    img_height = 96
+    img_width = 60  
+    img_height = 48
     # img_width = 240  
     # img_height = 192
 
@@ -311,8 +311,8 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
     camera_rand_pos_range = 0.03
 
     # head cam
-    head_camera_pos = [-0.02461, -0.12836, 0.04623]
-    head_camera_rot = [0.68301, 0.18301, -0.18301, -0.68301]
+    head_camera_pos = [-0.025, -0.085, 0.075]
+    head_camera_rot = [0., 0., 0.42262, 0.90631]
     head_img_width = img_width     
     head_img_height = img_height
     # head_img_width = 240  
@@ -346,7 +346,7 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 5.),   
+            clipping_range=(0.1, 5.),   
             projection_type="pinhole",
         ),
         width=head_img_width,   
@@ -357,8 +357,8 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
 
     # wrist cam
     #wrist_camera_pos = [0.1, 0., 0.1201]
-    wrist_camera_pos = [-0.06, 0.0127, 0.06]
-    wrist_camera_rot = [0.1496, 0.15142, -0.72721, -0.65257]
+    wrist_camera_pos = [0., -0.06, 0.]
+    wrist_camera_rot = [0., 0., 1., 0.]
     wrist_img_width = img_width      
     wrist_img_height = img_height   
     # wrist_img_width = 240  
@@ -392,7 +392,7 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 5.),   
+            clipping_range=(0.001, 5.),   
             projection_type="pinhole",
         ),
         width=wrist_img_width,   
@@ -412,7 +412,7 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
             focal_length=efl_mm,                       
             horizontal_aperture=horizontal_aperture, 
             vertical_aperture=vertical_aperture,   
-            clipping_range=(0.01, 5.),   
+            clipping_range=(0.001, 5.),   
             projection_type="pinhole",
         ),
         width=wrist_img_width,   
@@ -425,7 +425,7 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
         prim_path="/World/envs/env_.*/Robot/right_hand/right_index_tip_link",
         update_period=0.0,
         history_length=1,
-        debug_vis=True,
+        debug_vis=False,
     )
 
     pred_pos_marker_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
@@ -459,7 +459,7 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
     lift_sharpness = 8.5
 
     # Goal reaching parameters
-    press_force_goal = 0.2
+    press_force_goal = 5.
     object_goal_tol = 0.02 # m
     success_for_adr = 0.2
     min_steps_for_dr_change = 240 # number of steps
@@ -470,8 +470,8 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
     object_height_thresh = 0.15
 
     # Object spawning params
-    x_center = -0.6
-    x_width = 0.3
+    x_center = -0.3
+    x_width = 0.6
     y_center = 0.255
     y_width = 0.22
     z_center = 0.92
@@ -497,8 +497,7 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
         1., 1., 1., 1.,
         1., 1., 1., 1.,
         1., 1., 1., 1.,
-        1., 1., 1., 1.,
-        1., 1., 
+        1., 1., 1.,
     ]
 
     # domain randomization config
@@ -513,11 +512,11 @@ class BiliElevatorEnvCfg(DirectRLEnvCfg):
             "restitution_range": (0.0, 0.0)
         },
         "robot_joint_stiffness_and_damping": {
-            "stiffness_distribution_params": (1.0, 1.0),
-            "damping_distribution_params": (1.0, 1.0),
+            "stiffness_distribution_params": (0.2, 1.0),
+            "damping_distribution_params": (0.2, 1.0),
         },
         "robot_joint_friction": {
-            "friction_distribution_params": (0., 0.),
+            "friction_distribution_params": (0., 2.),
         },
         "object_physics_material": {
             "static_friction_range": (1.0, 1.0),

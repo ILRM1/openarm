@@ -523,18 +523,7 @@ class OpenarmEnv(DirectRLEnv):
         self.object = RigidObject(multi_object_cfg)
         self.scene.rigid_objects["object"] = self.object
 
-
-
-        self.grasp_point_view = XformPrimView(
-            prim_path="/World/envs/env_.*/object/.*/baseLink/grasp_point",
-            device=self.device,
-        )
-
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
-
-        grasp_pos, grasp_quat = self.grasp_point_view.get_world_poses()
-        print('grasp pos', grasp_pos-self.scene.env_origins)
-
 
         # Find the current global minimum adr increment
         local_adr_increment = self.local_adr_increment.clone()
@@ -1201,28 +1190,28 @@ class OpenarmEnv(DirectRLEnv):
                                 np.random.uniform(0., 1.)
                             )
 
-                    for i in np_env_ids:
-                        shader_path = f"/World/envs/env_{i}/table/Looks/OmniPBR/Shader"
-                        shader_prim = self.stage.GetPrimAtPath(shader_path)
-                        shader_prim.GetAttribute("inputs:diffuse_texture").Set(
-                            random.choice(self.table_texture_files)
-                        )
-                        shader_prim.GetAttribute("inputs:diffuse_tint").Set(
-                            Gf.Vec3d(
-                                np.random.uniform(0., 1.),
-                                np.random.uniform(0., 1.),
-                                np.random.uniform(0., 1.)
-                            )
-                        )
-                        shader_prim.GetAttribute("inputs:specular_level").Set(
-                            np.random.uniform(0., 1.)
-                        )
-                        shader_prim.GetAttribute("inputs:reflection_roughness_constant").Set(
-                            np.random.uniform(0., 1.)
-                        )
-                        shader_prim.GetAttribute("inputs:texture_rotate").Set(
-                            np.random.uniform(0., 2*np.pi)
-                        )
+                    # for i in np_env_ids:
+                    #     shader_path = f"/World/envs/env_{i}/table/Looks/OmniPBR/Shader"
+                    #     shader_prim = self.stage.GetPrimAtPath(shader_path)
+                    #     shader_prim.GetAttribute("inputs:diffuse_texture").Set(
+                    #         random.choice(self.table_texture_files)
+                    #     )
+                    #     shader_prim.GetAttribute("inputs:diffuse_tint").Set(
+                    #         Gf.Vec3d(
+                    #             np.random.uniform(0., 1.),
+                    #             np.random.uniform(0., 1.),
+                    #             np.random.uniform(0., 1.)
+                    #         )
+                    #     )
+                    #     shader_prim.GetAttribute("inputs:specular_level").Set(
+                    #         np.random.uniform(0., 1.)
+                    #     )
+                    #     shader_prim.GetAttribute("inputs:reflection_roughness_constant").Set(
+                    #         np.random.uniform(0., 1.)
+                    #     )
+                    #     shader_prim.GetAttribute("inputs:texture_rotate").Set(
+                    #         np.random.uniform(0., 2*np.pi)
+                    #     )
 
         self.left_gripper_action = torch.ones(self.num_envs, device=self.device)
         self.pre_actions[env_ids] = torch.zeros(num_ids, 6, device=self.device, dtype=self.pre_actions.dtype)

@@ -68,9 +68,11 @@ class BiliElevatorEnv(DirectRLEnv):
         )
 
         # list of actuated joints
-        self.actuated_dof_indices = list()
-        for joint_name in (cfg.left_arm_joint_name+cfg.right_arm_joint_name + cfg.left_gripper_joint_name + cfg.right_gripper_joint_name):
-            self.actuated_dof_indices.append(self.robot.joint_names.index(joint_name))
+        self.left_arm_joint_id = [self.robot.joint_names.index(joint_name) for joint_name in cfg.left_arm_joint_name]
+        self.right_arm_joint_id = [self.robot.joint_names.index(joint_name) for joint_name in cfg.right_arm_joint_name]
+        self.left_gripper_joint_id = [self.robot.joint_names.index(joint_name) for joint_name in cfg.left_gripper_joint_name]
+        self.right_gripper_joint_id = [self.robot.joint_names.index(joint_name) for joint_name in cfg.right_gripper_joint_name]
+        self.actuated_dof_indices = self.left_arm_joint_id+self.right_arm_joint_id+self.left_gripper_joint_id+self.right_gripper_joint_id 
 
         # joint limits
         joint_pos_limits = self.robot.root_physx_view.get_dof_limits().to(self.device)
@@ -78,16 +80,14 @@ class BiliElevatorEnv(DirectRLEnv):
         self.robot_dof_lower_limits = joint_pos_limits[..., 0][:, self.actuated_dof_indices]
         self.robot_dof_upper_limits = joint_pos_limits[..., 1][:, self.actuated_dof_indices]
 
-        self.left_arm_joint_id = self.actuated_dof_indices[:7].copy()
-        self.right_arm_joint_id = self.actuated_dof_indices[7:14].copy()
-        self.left_gripper_joint_id = self.actuated_dof_indices[14:30].copy()
-        self.right_gripper_joint_id = self.actuated_dof_indices[30:46].copy()
-
         self.right_finger_joint_pos = torch.ones(len(self.right_gripper_joint_id), device=self.device) * torch.pi/2.
-        self.right_finger_joint_pos[12:] = torch.tensor([1.72, 0.94, 0.22, 0.55], device=self.device)
-        self.right_finger_joint_pos[:3] = torch.tensor([0., 0., 0.], device=self.device)
+        self.right_finger_joint_pos[-4:] = torch.tensor([1.72, 0.94, 0.22, 0.55], device=self.device)
+        #self.right_finger_joint_pos[:3] = torch.tensor([0.,0.,0.], device=self.device)
         self.right_finger_joint_pos = self.right_finger_joint_pos.repeat(self.num_envs, 1)
-        self.right_finger_joint_pos = torch.clamp(self.right_finger_joint_pos, min=self.robot_dof_lower_limits[0, 30:46], max=self.robot_dof_upper_limits[0, 30:46])
+
+        right_finger_dof_lower_limits = joint_pos_limits[..., 0][:, self.right_gripper_joint_id]
+        right_finger_dof_upper_limits = joint_pos_limits[..., 1][:, self.right_gripper_joint_id]
+        self.right_finger_joint_pos = torch.clamp(self.right_finger_joint_pos, min=right_finger_dof_lower_limits, max=right_finger_dof_upper_limits)
 
         self.body_dof_indices = list()
         for joint_name in (self.cfg.leg_joint_name+self.cfg.head_joint_name+self.cfg.body_joint_name):
@@ -144,9 +144,10 @@ class BiliElevatorEnv(DirectRLEnv):
         self.object_applied_torque = torch.zeros(self.num_envs, 1, 3, device=self.device)
 
         # object offset
-        y_offsets = torch.tensor([0.0, 0.1, 0.2, -0.1, -0.2], device=self.device)
-        self.button_num = torch.arange(self.num_envs, device=self.device) % len(y_offsets)
-        self.object_y_offsets = y_offsets[self.button_num] * self.object_scale                  
+        y_offsets = torch.tensor([-0.2, -0.1, 0.0, 0.1, 0.2], device=self.device)
+        self.num_buttons = len(y_offsets)
+        self.button_num = torch.arange(self.num_envs, device=self.device) % self.num_buttons
+        self.object_y_offsets = y_offsets[self.button_num] * self.object_scale[:,0]
 
         # Object noise
         self.object_pos_bias_width = torch.zeros(self.num_envs, 1, device=self.device)
@@ -198,12 +199,12 @@ class BiliElevatorEnv(DirectRLEnv):
             self.head_cam_rot_orig[[1, 2, 3, 0]]
         ).as_euler('xyz', degrees=True)[None, :]
 
-        self.wrist_L_cam_pos_orig = torch.tensor(
+        self.wrist_R_cam_pos_orig = torch.tensor(
             self.cfg.wrist_camera_pos
         ).to(self.device).unsqueeze(0)
-        self.wrist_L_cam_rot_orig = np.array(self.cfg.wrist_camera_rot)
-        self.wrist_L_cam_rot_eul_orig = R.from_quat(
-            self.wrist_L_cam_rot_orig[[1, 2, 3, 0]]
+        self.wrist_R_cam_rot_orig = np.array(self.cfg.wrist_camera_rot)
+        self.wrist_R_cam_rot_eul_orig = R.from_quat(
+            self.wrist_R_cam_rot_orig[[1, 2, 3, 0]]
         ).as_euler('xyz', degrees=True)[None, :]
 
         # Store cam_frame1 prims and original local positions for per-reset randomization
@@ -306,11 +307,11 @@ class BiliElevatorEnv(DirectRLEnv):
         self.head_cam = TiledCamera(self.cfg.head_cam_cfg)
         self.scene.sensors["head_cam"] = self.head_cam
 
-        self.wrist_L_cam = TiledCamera(self.cfg.wrist_L_cam_cfg)
-        self.scene.sensors["wrist_L_cam"] = self.wrist_L_cam
+        # self.wrist_L_cam = TiledCamera(self.cfg.wrist_L_cam_cfg)
+        # self.scene.sensors["wrist_L_cam"] = self.wrist_L_cam
 
-        # self.wrist_R_cam = TiledCamera(self.cfg.wrist_R_cam_cfg)
-        # self.scene.sensors["wrist_R_cam"] = self.wrist_R_cam
+        self.wrist_R_cam = TiledCamera(self.cfg.wrist_R_cam_cfg)
+        self.scene.sensors["wrist_R_cam"] = self.wrist_R_cam
 
         self.right_index_tip_contact_sensor = ContactSensor(self.cfg.right_index_tip_contact_sensor_cfg)
         self.scene.sensors["right_index_tip_contact_sensor"] = self.right_index_tip_contact_sensor
@@ -600,8 +601,8 @@ class BiliElevatorEnv(DirectRLEnv):
         right_target_pos = right_target_pos - root_offset
         right_target_pose = torch.cat((right_target_pos, right_target_quat), dim=-1).to(dtype=self.right_tcp_pose.dtype)
 
-        right_target_pose = torch.tensor([-0.3,  0.,  1.,  0.3855, -0.0100,  0.9226,  0.0041],device='cuda:0').repeat(self.num_envs, 1)
-        right_target_pose[:,:3] = right_target_pose[:, :3] - root_offset
+        # right_target_pose = torch.tensor([-0.31,  0.3,  1.,  0.3855, -0.0100,  0.9226,  0.0041],device='cuda:0').repeat(self.num_envs, 1)
+        # right_target_pose[:,:3] = right_target_pose[:, :3] - root_offset
         
         self.diff_ik_controller.set_command(right_target_pose)
         arm_joint_pos_des = self.compute_ik(self.right_tcp_id, self.right_arm_joint_id)
@@ -635,35 +636,35 @@ class BiliElevatorEnv(DirectRLEnv):
             )
             head_depth_flat = head_depth.reshape(head_depth.shape[0], -1)  # (N, 19200)
 
-            wrist_L_rgb = self.wrist_L_cam.data.output["rgb"].clone() / 255.
-            wrist_L_depth = self.wrist_L_cam.data.output["depth"].clone()
-            wrist_L_mask = wrist_L_depth > self.cfg.d_max*10
-            wrist_L_depth[wrist_L_depth <= 1e-8] = 10
-            wrist_L_depth[wrist_L_depth > 1.] = 0.
-            wrist_L_depth[wrist_L_depth < self.cfg.d_min] = 0.
-            wrist_L_depth = wrist_L_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
-            wrist_L_depth = F.interpolate(
-                wrist_L_depth, size=(self.cfg.distil_depth_height, self.cfg.distil_depth_width),
+            wrist_R_rgb = self.wrist_R_cam.data.output["rgb"].clone() / 255.
+            wrist_R_depth = self.wrist_R_cam.data.output["depth"].clone()
+            wrist_R_mask = wrist_R_depth > self.cfg.d_max*10
+            wrist_R_depth[wrist_R_depth <= 1e-8] = 10
+            wrist_R_depth[wrist_R_depth > 1.] = 0.
+            wrist_R_depth[wrist_R_depth < self.cfg.d_min] = 0.
+            wrist_R_depth = wrist_R_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
+            wrist_R_depth = F.interpolate(
+                wrist_R_depth, size=(self.cfg.distil_depth_height, self.cfg.distil_depth_width),
                 mode='bilinear', align_corners=False,
             )
-            wrist_L_depth_flat = wrist_L_depth.reshape(wrist_L_depth.shape[0], -1)  # (N, 19200)
+            wrist_R_depth_flat = wrist_R_depth.reshape(wrist_R_depth.shape[0], -1)  # (N, 19200)
        
             student_policy_obs = self.compute_student_policy_observations()
             teacher_policy_obs = self.compute_policy_observations()
             critic_obs = self.compute_critic_observations()
 
-            teacher_policy_obs = torch.cat([teacher_policy_obs, head_depth_flat, wrist_L_depth_flat], dim=-1)
+            teacher_policy_obs = torch.cat([teacher_policy_obs, head_depth_flat, wrist_R_depth_flat], dim=-1)
 
             aux_info = {"object_pos": self.object_pos,}
 
             observations = {
                 "policy": student_policy_obs,
                 "depth_left": head_depth,
-                "depth_right": wrist_L_depth,
+                "depth_right": wrist_R_depth,
                 "mask_left": head_mask.permute((0, 3, 1, 2)),
-                "mask_right": wrist_L_mask.permute((0, 3, 1, 2)),
+                "mask_right": wrist_R_mask.permute((0, 3, 1, 2)),
                 "img_left": head_rgb.permute((0, 3, 1, 2)),
-                "img_right": wrist_L_rgb.permute((0, 3, 1, 2)),
+                "img_right": wrist_R_rgb.permute((0, 3, 1, 2)),
                 "expert_policy": teacher_policy_obs,
                 "critic": critic_obs,
                 "aux_info": aux_info,
@@ -682,18 +683,18 @@ class BiliElevatorEnv(DirectRLEnv):
             # )
             head_depth_flat = head_depth.reshape(head_depth.shape[0], -1)  # (N, 19200)
 
-            wrist_L_depth = self.wrist_L_cam.data.output["depth"].clone()
-            wrist_L_depth[wrist_L_depth <= 1e-8] = 10
-            wrist_L_depth[wrist_L_depth > 1.] = 0.
-            wrist_L_depth[wrist_L_depth < self.cfg.d_min] = 0.
-            wrist_L_depth = wrist_L_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
+            wrist_R_depth = self.wrist_R_cam.data.output["depth"].clone()
+            wrist_R_depth[wrist_R_depth <= 1e-8] = 10
+            wrist_R_depth[wrist_R_depth > 1.] = 0.
+            wrist_R_depth[wrist_R_depth < self.cfg.d_min] = 0.
+            wrist_R_depth = wrist_R_depth.permute((0, 3, 1, 2))  # (N, 1, H, W)
             # wrist_L_depth = F.interpolate(
             #     wrist_L_depth, size=(int(self.cfg.wrist_img_height/2), int(self.cfg.wrist_img_width/2)),
             #     mode='bilinear', align_corners=False,
             # )
-            wrist_L_depth_flat = wrist_L_depth.reshape(wrist_L_depth.shape[0], -1)  # (N, 19200)
+            wrist_R_depth_flat = wrist_R_depth.reshape(wrist_R_depth.shape[0], -1)  # (N, 19200)
 
-            policy_with_depth = torch.cat([policy_obs, head_depth_flat, wrist_L_depth_flat], dim=-1)  # (N, 34+19200+19200=38434)
+            policy_with_depth = torch.cat([policy_obs, head_depth_flat, wrist_R_depth_flat], dim=-1)  # (N, 34+19200+19200=38434)
             
             observations = policy_with_depth
         else:
@@ -705,44 +706,27 @@ class BiliElevatorEnv(DirectRLEnv):
         # Update signals related to reward
         self.compute_intermediate_reward_values()
 
-        (hand_to_object_reward,
-            object_to_goal_reward,
-            close_gripper_reward,
-            lift_reward
+        (hand_to_object_reward, 
+         press_reward, 
+         hand_to_goal_reward
         ) = compute_rewards(
                 self.force_goal_error,
                 self.reach_success,
                 self.press_success,
-                self.right_index_tip_contact_force,
-                self.right_tcp_pose,
-                self.object_pos,
-                self.reset_buf,
-                self.in_success_region,
-                self.max_episode_length,
                 self.hand_to_object_pos_error,
-                self.hand_to_object_pos_error_2d,
-                self.object_to_object_goal_pos_error,
-                self.object_vertical_error,
-                self.cfg.hand_to_object_weight,
-                self.cfg.hand_to_object_sharpness,
-                self.cfg.object_to_goal_weight,
-                self.dextrah_adr.get_custom_param_value("reward_weights", "object_to_goal_sharpness"),
-                self.dextrah_adr.get_custom_param_value("reward_weights", "finger_curl_reg"),
-                self.dextrah_adr.get_custom_param_value("reward_weights", "lift_weight"),
-                self.cfg.lift_sharpness
+                self.hand_to_object_pos_error_2d
             )
         if self.common_step_counter % 5 == 0:
             print("hand to obj: %0.3f" % self.hand_to_object_pos_error[0].item())
-            print("obj to goal: %0.3f" % self.object_to_object_goal_pos_error[0].item())
-            print("obj vertical: %0.3f" % self.object_vertical_error[0].item())
+            #print("obj to goal: %0.3f" % self.object_to_object_goal_pos_error[0].item())
+            #print("obj vertical: %0.3f" % self.object_vertical_error[0].item())
             print("success rate: %0.2f" % self.in_success_region.float().mean().item())
             print("lift weight: %0.4f" % self.dextrah_adr.get_custom_param_value("reward_weights", "lift_weight"))
             print("------------------------")
 
         # Add reward signals to tensorboard
-        self.extras["hand_to_object_reward"] = hand_to_object_reward.mean()
-        self.extras["object_to_goal_reward"] = object_to_goal_reward.mean()
-        self.extras["lift_reward"] = lift_reward.mean()
+        # self.extras["hand_to_object_reward"] = hand_to_object_reward.mean()
+        # self.extras["object_to_goal_reward"] = object_to_goal_reward.mean()
 
         # smooth_scale = torch.where((self.object_pos[:,2]>0.245)&(self.left_gripper_action<=0.5), -0.001, -0.001)
         #smooth = -0.02 * torch.norm(self.pre_actions - self.actions[:, :6], p=1, dim=-1)
@@ -750,19 +734,22 @@ class BiliElevatorEnv(DirectRLEnv):
         self.pre_actions = self.actions[:, :6].clone()
 
         # Reward TCP yaw matching object yaw (wrapped to handle the +-pi boundary)
-        object_yaw = euler_xyz_from_quat(self.object_rot)[2]
-        tcp_yaw = self.right_tcp_pose[:, 5]
-        yaw_error = torch.atan2(torch.sin(object_yaw - tcp_yaw), torch.cos(object_yaw - tcp_yaw)).abs()
-        angle_goal = 1. * torch.exp(-10. * yaw_error)
-        self.extras["angle_goal_reward"] = angle_goal.mean()
+        # object_yaw = euler_xyz_from_quat(self.object_rot)[2]
+        # tcp_yaw = self.right_tcp_pose[:, 5]
+        # yaw_error = torch.atan2(torch.sin(object_yaw - tcp_yaw), torch.cos(object_yaw - tcp_yaw)).abs()
+        # angle_goal = 1. * torch.exp(-10. * yaw_error)
+        # self.extras["angle_goal_reward"] = angle_goal.mean()
 
-        total_reward = 0.01 * (hand_to_object_reward + object_to_goal_reward + close_gripper_reward + angle_goal).clamp(min=0.)
-        #total_reward = torch.where(self.in_success_region, 0.01, -0.01)
-        #total_reward = torch.where(self.out_of_joint_limit, 0., total_reward)
+        total_reward = 0.01 * (hand_to_object_reward + press_reward + hand_to_goal_reward).clamp(min=0.)
+
+        penalty_over_force = self.right_index_tip_contact_force > (self.cfg.press_force_goal + 0.1)
+        penalty_contact_beforce_reach = (self.right_index_tip_contact_force > 0.) & (~self.reach_success)
+        
+        total_reward = torch.where(penalty_over_force | penalty_contact_beforce_reach, 0., total_reward)
 
         # Log other information
-        self.extras["num_adr_increases"] = self.dextrah_adr.num_increments()
-        self.extras["in_success_region"] = self.in_success_region.float().mean()
+        # self.extras["num_adr_increases"] = self.dextrah_adr.num_increments()
+        # self.extras["in_success_region"] = self.in_success_region.float().mean()
 
         # print('reach reward', hand_to_object_reward.mean())
         # print('lift reward', lift_reward.mean())
@@ -838,9 +825,9 @@ class BiliElevatorEnv(DirectRLEnv):
         # object_xy[:, 1] += self.cfg.y_center
         # object_start_state[env_ids, :2] = object_xy
 
-        # object_start_state[env_ids, 0] = self.cfg.x_center + x_width_spawn * (1.5*torch.rand(num_ids, device=self.device) - 0.5)
+        object_start_state[env_ids, 0] = self.cfg.x_center + x_width_spawn * (-1.*torch.rand(num_ids, device=self.device))
         # object_start_state[env_ids, 1] = self.cfg.y_center + y_width_spawn * 2.*(torch.rand(num_ids, device=self.device)-0.5)
-        object_start_state[env_ids, 0] = self.cfg.x_center + x_width_spawn * 2.*(torch.rand(num_ids, device=self.device) - 0.5)
+        #object_start_state[env_ids, 0] = self.cfg.x_center + x_width_spawn * 2.*(torch.rand(num_ids, device=self.device) - 0.5)
         object_start_state[env_ids, 1] = self.cfg.y_center + y_width_spawn * 2.*(torch.rand(num_ids, device=self.device)-0.5)
         object_start_state[env_ids, 2] = self.cfg.z_center + z_width_spawn * 2.*(torch.rand(num_ids, device=self.device)-0.5)
        
@@ -894,8 +881,8 @@ class BiliElevatorEnv(DirectRLEnv):
         dof_vel = joint_vel_noise * joint_vel_deltas
         dof_vel += self.robot_start_joint_vel[env_ids].clone()
 
-        dof_pos[:, 30:46] = self.right_finger_joint_pos
-        dof_vel[:, 30:46] = 0.
+        dof_pos[:, -len(self.right_gripper_joint_id):] = self.right_finger_joint_pos
+        dof_vel[:,-len(self.right_gripper_joint_id):] = 0.
         
         dof_pos = torch.cat([dof_pos, self.robot_start_body_joint_pos[env_ids]], dim=-1)
         dof_vel = torch.cat([dof_vel, self.robot_start_body_joint_vel[env_ids]], dim=-1)
@@ -1063,18 +1050,18 @@ class BiliElevatorEnv(DirectRLEnv):
             self.cfg.camera_rand_rot_range,
             size=(num_ids, 3)
         )
-        wrist_new_rots = wrist_rand_rots + self.wrist_L_cam_rot_eul_orig
+        wrist_new_rots = wrist_rand_rots + self.wrist_R_cam_rot_eul_orig
         wrist_new_rots_quat = R.from_euler('xyz', wrist_new_rots, degrees=True).as_quat()
         wrist_new_rots_quat = wrist_new_rots_quat[:, [3, 0, 1, 2]]
         wrist_new_rots_quat = torch.tensor(wrist_new_rots_quat).to(self.device).float()
-        wrist_new_pos = self.wrist_L_cam_pos_orig + torch.empty(
+        wrist_new_pos = self.wrist_R_cam_pos_orig + torch.empty(
             num_ids, 3, device=self.device
         ).uniform_(
             -self.cfg.camera_rand_pos_range,
             self.cfg.camera_rand_pos_range
         )
     
-        self.wrist_L_cam.set_world_poses(
+        self.wrist_R_cam.set_world_poses(
             positions=wrist_new_pos + self.scene.env_origins[env_ids],
             orientations=wrist_new_rots_quat,
             env_ids=env_ids,
@@ -1344,7 +1331,7 @@ class BiliElevatorEnv(DirectRLEnv):
         self.object_pos = self.object.data.root_pos_w - self.scene.env_origins
         self.object_pos[:, 0] = self.object_pos[:, 0] + 0.03
         self.object_pos[:, 1] = self.object_pos[:, 1] + self.object_y_offsets
-        self.object_pos[:, 2] = self.object_pos[:, 2] * self.object_scale
+        self.object_pos[:, 2] = self.object_pos[:, 2] * self.object_scale[:,0]
 
         # NOTE: noise on object pos and rot is per-step sampled uniform noise and sustained
         # bias noise sampled only at start of rollout
@@ -1358,7 +1345,7 @@ class BiliElevatorEnv(DirectRLEnv):
     def compute_intermediate_reward_values(self):
         # Calculate distance between object and its goal position
         #self.object_to_object_goal_pos_error = torch.norm(self.left_tcp_pose[:,:3] - self.object_goal, dim=-1)
-        self.object_to_object_goal_pos_error = torch.norm(self.right_tcp_pose[:,:3] - self.object_goal, dim=-1)
+        #self.object_to_object_goal_pos_error = torch.norm(self.right_tcp_pose[:,:3] - self.object_goal, dim=-1)
         
         # Object to tcp distance
         self.hand_to_object_pos_error = torch.norm(self.right_tcp_pose[:,:3] - self.object_pos, dim=-1)
@@ -1366,7 +1353,7 @@ class BiliElevatorEnv(DirectRLEnv):
         self.force_goal_error = torch.abs(self.right_index_tip_contact_force - self.cfg.press_force_goal)
         
         # Calculate whether robot is within success region
-        self.reach_success |= self.object_to_object_goal_pos_error < 0.005
+        self.reach_success |= self.hand_to_object_pos_error < 0.01
         self.press_success |= self.right_index_tip_contact_force > self.cfg.press_force_goal
         self.in_success_region = self.reach_success & self.press_success & (self.hand_to_object_pos_error < 0.01)
 
@@ -1381,7 +1368,7 @@ class BiliElevatorEnv(DirectRLEnv):
         
         obs = torch.cat(
             (
-                self.button_num.unsqueeze(-1),
+                F.one_hot(self.button_num, num_classes=self.num_buttons).float(), #5
                 # robot
                 self.robot_dof_pos_noisy, #6
                 self.right_tcp_pose_noisy, #6
@@ -1394,17 +1381,16 @@ class BiliElevatorEnv(DirectRLEnv):
         return obs
 
     def compute_policy_observations(self):
-        
         obs = torch.cat(
             (
-                self.button_num.unsqueeze(-1),
+                F.one_hot(self.button_num, num_classes=self.num_buttons).float(), #5
                 self.robot_dof_pos, #7
                 self.robot_dof_vel, #7
                 self.right_tcp_pose, #6
                 # self.right_tcp_pose[:, :3], 
                 # self.robot.data.body_pose_w[:, self.right_tcp_id][:, 3:], #7
                 self.right_tcp_vel, # 6
-                self.right_index_tip_contact_force.unsqueeze(-1),
+                self.right_index_tip_contact_force.unsqueeze(-1), #1
                 self.object_pos, #3
                 #self.object_pos, #3
                 #self.object_rot, #4
@@ -1419,28 +1405,19 @@ class BiliElevatorEnv(DirectRLEnv):
     def compute_critic_observations(self):
         obs = torch.cat(
             (
-                # robot
+                F.one_hot(self.button_num, num_classes=self.num_buttons).float(), #5
                 self.robot_dof_pos, #7
                 self.robot_dof_vel, #7
-                self.right_tcp_pose, 
+                self.right_tcp_pose, #6
                 # self.right_tcp_pose[:, :3], 
                 # self.robot.data.body_pose_w[:, self.right_tcp_id][:, 3:], #7
-                self.right_tcp_vel, 
-                self.object_goal, #3
+                self.right_tcp_vel, # 6
+                self.right_index_tip_contact_force.unsqueeze(-1), #1
+                self.object_pos, #3
                 #self.object_pos, #3
                 #self.object_rot, #4
                 #self.object_scale,
-                self.actions,
-                # dr values for robot
-                # TODO: should scale dof stiffness and damping if you want them.
-                # NOTE: probably don't need them because dynamic response for robot
-                # is always available and policy can adjust
-#                self.robot_dof_stiffness, 
-#                self.robot_dof_damping, # TODO: probably should scale these to be 0, 1
-                #self.robot_material_props,
-                # dr values for object
-                #self.object_mass,
-                #self.object_material_props
+                #self.actions,
             ),
             dim=-1,
         )
@@ -1541,23 +1518,8 @@ def compute_rewards(
     force_goal_error,
     reach_success,
     press_success,
-    right_index_tip_contact_force,
-    right_tcp_pose,
-    object_pos,
-    reset_buf: torch.Tensor,
-    in_success_region: torch.Tensor,
-    max_episode_length: float,
     hand_to_object_pos_error: torch.Tensor,
     hand_to_object_pos_error_2d: torch.Tensor,
-    object_to_object_goal_pos_error: torch.Tensor,
-    object_vertical_error: torch.Tensor,
-    hand_to_object_weight: float,
-    hand_to_object_sharpness: float,
-    object_to_goal_weight: float,
-    object_to_goal_sharpness: float,
-    finger_curl_reg_weight: float,
-    lift_weight: float,
-    lift_sharpness: float
 ):
     # Reward for moving fingertip and palm points closer to object centroid point
     hand_to_object_reward = 3. * torch.exp(-15. * hand_to_object_pos_error)
@@ -1570,12 +1532,8 @@ def compute_rewards(
     # Reward for moving the object to the goal translational position
     hand_to_goal_reward = 3. * torch.exp(-15. * hand_to_object_pos_error)
     hand_to_goal_reward = torch.where(reach_success & press_success, hand_to_goal_reward, 0.)
-    
-    # Reward for lifting object off table and towards object goal
-    lift_reward = 0. * torch.exp(-10. * object_vertical_error)
-    lift_reward = torch.where((object_pos[:,2]>0.02)&(hand_to_object_pos_error<=0.03), lift_reward, 0.)
 
-    return hand_to_object_reward, press_reward, hand_to_goal_reward, lift_reward
+    return hand_to_object_reward, press_reward, hand_to_goal_reward
 
 @torch.jit.script
 def randomize_rotation(rand0, rand1, x_unit_tensor, y_unit_tensor):

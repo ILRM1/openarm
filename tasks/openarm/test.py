@@ -3,9 +3,12 @@ import numpy as np
 # head_img_width = 1920     
 # head_img_height = 1536
     
-hfov = float(np.deg2rad(115))         # Horizontal field of view
-vfov = float(np.deg2rad(90.5))          # Vertical field of view
-efl_mm = 3.          # Effective focal length
+hfov = float(np.deg2rad(98.96))         # Horizontal field of view
+vfov = float(np.deg2rad(77.24))          # Vertical field of view
+efl_mm = 3.55          # Effective focal length    
+# hfov = float(np.deg2rad(115))         # Horizontal field of view
+# vfov = float(np.deg2rad(90.5))          # Vertical field of view
+# efl_mm = 3.          # Effective focal length
 # max_distortion = -0.793         # -3% barrel (negligible → pinhole is accurate)
 
 # FX = float((head_img_width  / 2.0) / np.tan(hfov / 2.0))

@@ -115,8 +115,8 @@ class EventCfg:
 @configclass
 class OpenarmEnvCfg(DirectRLEnvCfg):
     # Placeholder for objects_dir which targets the directory of objects for training
-    objects_dir = "handbag"
-    valid_objects_dir = ["handbag"]
+    objects_dir = "primitives"
+    valid_objects_dir = ["primitives"]
 
     # Toggle for using cuda graph
     use_cuda_graph = False
